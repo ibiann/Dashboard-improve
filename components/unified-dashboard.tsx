@@ -5,7 +5,7 @@ import {
   ChevronDown, Bell, Plus, ChevronRight, ChevronLeft,
   Network, LayoutDashboard, Users, CalendarRange, Archive,
   ShieldCheck, AlertTriangle, Lock, Folder, ClipboardList,
-  Layers, LayoutGrid, Clock, Construction,
+  Layers, LayoutGrid, Clock, Construction, Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +22,10 @@ import {
 } from "@/lib/strategic-mock-data";
 import { Activity, Layers as LayersIcon, Gauge, Users as UsersIcon, DollarSign, ShieldAlert } from "lucide-react";
 
-// ── L2 content imports ───────────────────────────────────────────────────────
+// ── L3 content imports ───────────────────────────────────────────────────────
+import { EngineerContent } from "@/components/engineer/engineer-content";
+
+
 import { PMHome } from "@/components/pm/pm-home";
 import { PMWorkspace } from "@/components/pm/pm-workspace";
 import { PhasePlanTab, ResourceTab } from "@/components/pm/pm-project-detail";
@@ -38,15 +41,16 @@ import {
 // Types
 // ────────────────────────────────────────────────────────────────────────────
 
-type ViewRole = "CEO" | "CTO" | "PM";
+type ViewRole = "CEO" | "CTO" | "PM" | "Engineer";
 type L1Tab = "portfolio" | "people" | "meetings" | "archive" | "quality" | "risk" | "permissions";
 type PMHomeView = "projects" | "workspace" | "notifications";
 type PMProjectTab = "phases" | "kanban" | "resource" | "timesheets" | "reminders";
 
 const ROLE_OPTIONS: { role: ViewRole; title: string; desc: string }[] = [
-  { role: "CEO", title: "CEO", desc: "Tổng Giám Đốc — Executive Overview" },
-  { role: "CTO", title: "CTO", desc: "Strategic — Full Technical Access" },
-  { role: "PM",  title: "PM",  desc: "Project Manager — My Projects" },
+  { role: "CEO",      title: "CEO",      desc: "Tổng Giám Đốc — Executive Overview" },
+  { role: "CTO",      title: "CTO",      desc: "Strategic — Full Technical Access" },
+  { role: "PM",       title: "PM",       desc: "Project Manager — My Projects" },
+  { role: "Engineer", title: "Engineer", desc: "Kỹ sư — My Tasks & Timesheets" },
 ];
 
 // Placeholder
@@ -96,11 +100,14 @@ interface SidebarContentProps {
   pmTab: PMProjectTab;
   setPmTab: (t: PMProjectTab) => void;
   onPmBack: () => void;
+  engTab: string;
+  setEngTab: (t: string) => void;
 }
 
 function SidebarContent({
   role, collapsed, l1Tab, setL1Tab,
   pmHomeView, setPmHomeView, pmProject, pmTab, setPmTab, onPmBack,
+  engTab, setEngTab,
 }: SidebarContentProps) {
   if (role === "CEO") {
     const items: { icon: React.ElementType; label: string; tab: L1Tab }[] = [
@@ -195,17 +202,42 @@ function SidebarContent({
     { icon: ClipboardList, label: "Workspace",     view: "workspace" },
     { icon: Bell,         label: "Nhắc việc",      view: "notifications" },
   ];
+  if (role === "PM") {
+    return (
+      <>
+        {!collapsed && (
+          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+            Level 2 — PM
+          </p>
+        )}
+        <nav className="flex-1 py-1 space-y-0.5 px-2">
+          {homeItems.map(({ icon, label, view }) => (
+            <SidebarItem key={view} icon={icon} label={label} active={pmHomeView === view}
+              onClick={() => setPmHomeView(view)} collapsed={collapsed} />
+          ))}
+        </nav>
+      </>
+    );
+  }
+
+  // Engineer
+  const engItems: { icon: React.ElementType; label: string; tab: string }[] = [
+    { icon: LayoutDashboard, label: "Dashboard",   tab: "dashboard" },
+    { icon: ClipboardList,   label: "Công việc",   tab: "tasks" },
+    { icon: Clock,           label: "Chấm công",   tab: "timesheet" },
+    { icon: CalendarRange,   label: "Lịch & Họp",  tab: "calendar" },
+  ];
   return (
     <>
       {!collapsed && (
         <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-          Level 2 — PM
+          Level 3 — Engineer
         </p>
       )}
       <nav className="flex-1 py-1 space-y-0.5 px-2">
-        {homeItems.map(({ icon, label, view }) => (
-          <SidebarItem key={view} icon={icon} label={label} active={pmHomeView === view}
-            onClick={() => setPmHomeView(view)} collapsed={collapsed} />
+        {engItems.map(({ icon, label, tab }) => (
+          <SidebarItem key={tab} icon={icon} label={label} active={engTab === tab}
+            onClick={() => setEngTab(tab)} collapsed={collapsed} />
         ))}
       </nav>
     </>
@@ -373,8 +405,15 @@ const PM_TAB_LABELS: Record<PMProjectTab, string> = {
 
 function buildBreadcrumbs(
   role: ViewRole, l1Tab: L1Tab, pmHomeView: PMHomeView,
-  pmProject: PMProject | null, pmTab: PMProjectTab
+  pmProject: PMProject | null, pmTab: PMProjectTab, engTab: string
 ): string[] {
+  if (role === "Engineer") {
+    const engLabels: Record<string, string> = {
+      dashboard: "Dashboard", tasks: "Công việc",
+      timesheet: "Chấm công", calendar: "Lịch & Họp",
+    };
+    return ["Engineer", engLabels[engTab] ?? engTab];
+  }
   if (role === "CEO" || role === "CTO") {
     return ["Dashboard", L1_TAB_LABELS[l1Tab]];
   }
@@ -402,6 +441,9 @@ export function UnifiedDashboard() {
   const [pmProject, setPmProject]   = useState<PMProject | null>(null);
   const [pmTab, setPmTab]           = useState<PMProjectTab>("phases");
 
+  // L3 Engineer state
+  const [engTab, setEngTab] = useState("dashboard");
+
   // Close dropdown on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -419,6 +461,7 @@ export function UnifiedDashboard() {
     setViewRole(role);
     setShowRoleDrop(false);
     if (role === "PM") { setPmProject(null); setPmHomeView("projects"); }
+    else if (role === "Engineer") { setEngTab("dashboard"); }
     else { setL1Tab("portfolio"); }
   }
 
@@ -432,10 +475,14 @@ export function UnifiedDashboard() {
     setPmProject(null);
   }
 
-  const breadcrumbs = buildBreadcrumbs(viewRole, l1Tab, pmHomeView, pmProject, pmTab);
+  const breadcrumbs = buildBreadcrumbs(viewRole, l1Tab, pmHomeView, pmProject, pmTab, engTab);
 
   // ── Content renderer ──────────────────────────────────────────────────────
   function renderContent() {
+    if (viewRole === "Engineer") {
+      return <EngineerContent activeTab={engTab} />;
+    }
+
     if (viewRole === "CEO" || viewRole === "CTO") {
       const role = viewRole;
       switch (l1Tab) {
@@ -491,7 +538,7 @@ export function UnifiedDashboard() {
             <div className="flex-1 min-w-0">
               <p className="text-white font-extrabold text-sm leading-tight truncate">Lancsnetworks</p>
               <p className="text-white/40 text-[9px] font-semibold tracking-widest uppercase mt-0.5">
-                {viewRole === "CEO" ? "Tổng Giám Đốc" : viewRole === "CTO" ? "CTO · Strategic" : "Level 2 — PM"}
+                {viewRole === "CEO" ? "Tổng Giám Đốc" : viewRole === "CTO" ? "CTO · Strategic" : viewRole === "Engineer" ? "Level 3 — Engineer" : "Level 2 — PM"}
               </p>
             </div>
           )}
@@ -519,6 +566,8 @@ export function UnifiedDashboard() {
             pmTab={pmTab}
             setPmTab={setPmTab}
             onPmBack={handlePmBack}
+            engTab={engTab}
+            setEngTab={setEngTab}
           />
         </div>
       </aside>
@@ -608,8 +657,8 @@ export function UnifiedDashboard() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto px-4 py-5 md:px-6 space-y-5">
-          {/* Page title (L1 or PM home) */}
-          {(viewRole !== "PM" || !pmProject) && (
+          {/* Page title (L1 or PM home) — hide for Engineer (self-renders header) and PM project view */}
+          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && (
             <div>
               <h1 className="text-base font-extrabold text-foreground tracking-tight font-sans">
                 {viewRole === "PM" ? PM_HOME_LABELS[pmHomeView] : L1_TAB_LABELS[l1Tab]}
