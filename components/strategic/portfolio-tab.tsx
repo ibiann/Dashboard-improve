@@ -61,9 +61,10 @@ function PhaseBar({ phases }: { phases: L1Project["phases"] }) {
 interface PortfolioTabProps {
   projects: L1Project[];
   role: "CEO" | "CTO";
+  onSelectProject?: (project: L1Project) => void;
 }
 
-export function PortfolioTab({ projects, role }: PortfolioTabProps) {
+export function PortfolioTab({ projects, role, onSelectProject }: PortfolioTabProps) {
   const [search, setSearch] = useState("");
   const [ragFilter, setRagFilter] = useState<FilterRAG>("all");
   const [catFilter, setCatFilter] = useState<FilterCat>("all");
@@ -203,7 +204,14 @@ export function PortfolioTab({ projects, role }: PortfolioTabProps) {
             {paged.map((p) => {
               const budgetPct = Math.round((p.budget.spent / p.budget.total) * 100);
               return (
-                <tr key={p.id} className="hover:bg-muted/20 transition-colors">
+                <tr
+                  key={p.id}
+                  onClick={() => onSelectProject?.(p)}
+                  className={cn(
+                    "transition-colors",
+                    onSelectProject ? "cursor-pointer hover:bg-primary/5" : "hover:bg-muted/20"
+                  )}
+                >
                   <td className="px-4 py-3">
                     <div className="font-semibold text-foreground leading-tight">{p.name}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">
