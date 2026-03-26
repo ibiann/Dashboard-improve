@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Search, X, Mail, Phone, Calendar, Star,
   ChevronRight, ChevronLeft, List, GitFork, ChevronDown,
@@ -55,21 +55,6 @@ function KPIBadge({ score }: { score: number }) {
       style={{ backgroundColor: color }}
     >
       KPI: {score} — {label}
-    </span>
-  );
-}
-
-function StatusBadge({ status }: { status: Employee["status"] }) {
-  const isActive = status === "active";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold",
-        isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-      )}
-    >
-      <span className={cn("w-1.5 h-1.5 rounded-full", isActive ? "bg-green-600" : "bg-gray-400")} />
-      {isActive ? "Đang làm" : "Nghỉ phép"}
     </span>
   );
 }
@@ -242,16 +227,12 @@ function OrgNode({
   emp,
   allEmps,
   onSelect,
-  expandedIds,
-  onToggleExpand,
 }: {
   emp: Employee;
   allEmps: Employee[];
   onSelect: (e: Employee) => void;
-  expandedIds: Set<string>;
-  onToggleExpand: (id: string) => void;
 }) {
-  const expanded = expandedIds.has(emp.id);
+  const [expanded, setExpanded] = useState(true);
   const children = allEmps.filter((e) => e.managerId === emp.id);
   const score = avgKPI(emp.kpi);
   const { color } = kpiLabel(score);
@@ -292,7 +273,7 @@ function OrgNode({
       {children.length > 0 && (
         <>
           <button
-            onClick={() => onToggleExpand(emp.id)}
+            onClick={() => setExpanded((v) => !v)}
             className="mt-1 p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
             aria-label={expanded ? "Thu gọn" : "Mở rộng"}
           >
@@ -305,13 +286,7 @@ function OrgNode({
                 <li key={child.id} className="flex flex-col items-center relative">
                   {/* Horizontal connector */}
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-px h-3 bg-border" />
-                  <OrgNode
-                    emp={child}
-                    allEmps={allEmps}
-                    onSelect={onSelect}
-                    expandedIds={expandedIds}
-                    onToggleExpand={onToggleExpand}
-                  />
+                  <OrgNode emp={child} allEmps={allEmps} onSelect={onSelect} />
                 </li>
               ))}
             </ul>
@@ -333,7 +308,6 @@ export function PeopleTab() {
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Employee | null>(null);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   const filtered = useMemo(() => {
     let list = [...EMPLOYEES];
@@ -351,40 +325,6 @@ export function PeopleTab() {
     return list;
   }, [search, deptFilter, statusFilter]);
 
-  const employeesById = useMemo(() => {
-    return EMPLOYEES.reduce<Record<string, Employee>>((acc, e) => {
-      acc[e.id] = e;
-      return acc;
-    }, {});
-  }, []);
-
-  const orgEmployees = useMemo(() => {
-    // If user is filtering/searching, keep tree structure by including ancestors.
-    const hasAnyFilter = Boolean(search.trim()) || deptFilter !== "all" || statusFilter !== "all";
-    if (!hasAnyFilter) return EMPLOYEES;
-
-    const include = new Set<string>();
-    for (const e of filtered) {
-      include.add(e.id);
-      let cur = e;
-      while (cur.managerId) {
-        include.add(cur.managerId);
-        const parent = employeesById[cur.managerId];
-        if (!parent) break;
-        cur = parent;
-      }
-    }
-    return EMPLOYEES.filter((e) => include.has(e.id));
-  }, [deptFilter, employeesById, filtered, search, statusFilter]);
-
-  // Init expand state for current org data (preserve user's toggles).
-  useEffect(() => {
-    setExpandedIds((prev) => {
-      if (prev.size > 0) return prev;
-      return new Set(orgEmployees.map((e) => e.id));
-    });
-  }, [orgEmployees]);
-
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -398,16 +338,7 @@ export function PeopleTab() {
   );
 
   // Root employees for org tree
-  const roots = orgEmployees.filter((e) => e.managerId === null);
-
-  function toggleExpand(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const roots = EMPLOYEES.filter((e) => e.managerId === null);
 
   return (
     <div className="space-y-4">
@@ -523,7 +454,6 @@ export function PeopleTab() {
                     <div className="text-[10px] text-muted-foreground truncate">{emp.role} · {emp.dept}</div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       <KPIBadge score={score} />
-                      <StatusBadge status={emp.status} />
                       <span className="text-[10px] text-muted-foreground">
                         {emp.assignedProjects.length} dự án
                       </span>
@@ -581,14 +511,7 @@ export function PeopleTab() {
         <div className="bg-card rounded-xl border border-border p-4 overflow-auto">
           <ul className="flex gap-8 justify-start">
             {roots.map((r) => (
-              <OrgNode
-                key={r.id}
-                emp={r}
-                allEmps={orgEmployees}
-                onSelect={setSelected}
-                expandedIds={expandedIds}
-                onToggleExpand={toggleExpand}
-              />
+              <OrgNode key={r.id} emp={r} allEmps={EMPLOYEES} onSelect={setSelected} />
             ))}
           </ul>
         </div>

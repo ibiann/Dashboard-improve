@@ -2,9 +2,6 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { LangProvider } from '@/lib/i18n'
-import { AuthProvider } from '@/components/auth/auth-context'
-import { Toaster } from '@/components/ui/toaster'
-import { MeetingReminderListener } from '@/components/meetings/meeting-reminder-listener'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -41,13 +38,9 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body className="font-sans antialiased">
-        <AuthProvider>
-          <LangProvider>
-            {children}
-            <MeetingReminderListener />
-            <Toaster />
-          </LangProvider>
-        </AuthProvider>
+        <LangProvider>
+          {children}
+        </LangProvider>
         <Analytics />
       </body>
     </html>

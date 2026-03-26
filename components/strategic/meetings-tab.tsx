@@ -32,11 +32,9 @@ function isToday(dateStr: string) {
 function MeetingToast({
   meeting,
   onClose,
-  onViewDetails,
 }: {
   meeting: Meeting;
   onClose: () => void;
-  onViewDetails: () => void;
 }) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,16 +81,7 @@ function MeetingToast({
           </button>
         </div>
         <div className="flex gap-2 mt-3">
-          <button
-            onClick={() => {
-              setVisible(false);
-              setTimeout(() => {
-                onClose();
-                onViewDetails();
-              }, 300);
-            }}
-            className="flex-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors"
-          >
+          <button className="flex-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-md text-[10px] font-semibold hover:bg-primary/90 transition-colors">
             Xem chi tiết
           </button>
           <button
@@ -265,105 +254,6 @@ function CreateMeetingModal({
   );
 }
 
-// ── Meeting Details Modal ────────────────────────────────────────────────────
-function MeetingDetailsModal({
-  meeting,
-  onClose,
-}: {
-  meeting: Meeting;
-  onClose: () => void;
-}) {
-  const projectName = meeting.project ? L1_PROJECTS.find((p) => p.id === meeting.project)?.name : undefined;
-  const dateLabel = new Date(meeting.date + "T00:00:00").toLocaleDateString("vi-VN", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
-  return (
-    <>
-      <div className="fixed inset-0 bg-black/40 z-50" onClick={onClose} aria-hidden="true" />
-      <div
-        className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-lg bg-card rounded-xl shadow-2xl overflow-hidden"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Chi tiết cuộc họp"
-      >
-        <div className="flex items-center justify-between px-5 py-4 bg-accent text-accent-foreground">
-          <h2 className="font-bold text-sm">Chi tiết cuộc họp</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-white/20 transition-colors"
-            aria-label="Đóng"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-bold text-foreground">{meeting.title}</div>
-              <span
-                className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
-                style={{ backgroundColor: MEETING_COLORS[meeting.type] }}
-              >
-                {MEETING_TYPE_LABELS[meeting.type]}
-              </span>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {dateLabel} · {meeting.time} · {meeting.duration} phút
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-[11px] font-semibold text-muted-foreground">Địa điểm</div>
-            <div className="text-sm text-foreground">{meeting.location}</div>
-          </div>
-
-          {projectName && (
-            <div className="space-y-1">
-              <div className="text-[11px] font-semibold text-muted-foreground">Dự án</div>
-              <div className="text-sm text-foreground">
-                {meeting.project} — {projectName}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <div className="text-[11px] font-semibold text-muted-foreground">Thành viên tham dự</div>
-            {meeting.attendees.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {meeting.attendees.map((a, i) => (
-                  <span
-                    key={`${a}-${i}`}
-                    className="px-2 py-0.5 rounded-md text-[11px] font-semibold border border-border bg-background"
-                    title={a}
-                  >
-                    {a}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">Chưa có thành viên</div>
-            )}
-          </div>
-
-          <div className="flex justify-end pt-1">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold rounded-lg border border-border text-muted-foreground hover:bg-muted transition-colors"
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
 // ── Meetings Tab ──────────────────────────────────────────────────────────────
 const WEEKDAYS = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
@@ -372,7 +262,6 @@ export function MeetingsTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [createDate, setCreateDate] = useState<string | undefined>();
   const [toastDismissed, setToastDismissed] = useState(false);
-  const [detailsMeeting, setDetailsMeeting] = useState<Meeting | null>(null);
 
   const [calYear, setCalYear] = useState(2026);
   const [calMonth, setCalMonth] = useState(2); // 0-indexed: March = 2
@@ -423,7 +312,6 @@ export function MeetingsTab() {
 
   function handleCreate(m: Meeting) {
     setMeetings((prev) => [...prev, m]);
-    queueCeoReminder(m, 10);
   }
 
   const todayStr = new Date().toISOString().split("T")[0];
@@ -623,51 +511,10 @@ export function MeetingsTab() {
         />
       )}
 
-      {/* Details modal */}
-      {detailsMeeting && (
-        <MeetingDetailsModal meeting={detailsMeeting} onClose={() => setDetailsMeeting(null)} />
-      )}
-
       {/* Toast */}
       {!toastDismissed && upcomingMeeting && (
-        <MeetingToast
-          meeting={upcomingMeeting}
-          onClose={() => setToastDismissed(true)}
-          onViewDetails={() => setDetailsMeeting(upcomingMeeting)}
-        />
+        <MeetingToast meeting={upcomingMeeting} onClose={() => setToastDismissed(true)} />
       )}
     </div>
   );
-}
-
-function queueCeoReminder(meeting: Meeting, leadMinutes: number) {
-  try {
-    const meetingAt = new Date(meeting.date + "T" + meeting.time).getTime();
-    const fireAt = meetingAt - leadMinutes * 60_000;
-    if (!Number.isFinite(fireAt)) return;
-    if (fireAt <= Date.now()) return;
-
-    const key = "meeting_reminders_v1";
-    const raw = window.localStorage.getItem(key);
-    const items = (raw ? (JSON.parse(raw) as unknown) : []) as any[];
-    const safeItems = Array.isArray(items) ? items : [];
-
-    safeItems.push({
-      id: `rem_${meeting.id}_${fireAt}`,
-      targetRole: "CEO",
-      fireAt,
-      meeting: {
-        id: meeting.id,
-        title: meeting.title,
-        date: meeting.date,
-        time: meeting.time,
-        location: meeting.location,
-        duration: meeting.duration,
-      },
-    });
-
-    window.localStorage.setItem(key, JSON.stringify(safeItems));
-  } catch {
-    // ignore
-  }
 }

@@ -915,86 +915,45 @@ export const MEETINGS: Meeting[] = [
 // PERMISSIONS MATRIX
 // ──────────────────────────────────────────────────────────────────────────────
 
-export type PermEffect = "allow";
-export type PermAction =
-  | "view"
-  | "create"
-  | "edit"
-  | "delete"
-  | "manage"
-  | "assign"
-  | "approve"
-  | "export"
-  | "logwork";
-
-export type PermResource =
-  | "project"
-  | "task"
-  | "report"
-  | "risk"
-  | "resource"
-  | "meeting"
-  | "user"
-  | "permission";
-
-export interface PermissionItem {
-  key: `${PermResource}.${PermAction}.${PermEffect}`;
+export interface PermModule {
+  id: string;
   label: string;
   group: string;
-  resource: PermResource;
-  action: PermAction;
-  description?: string;
 }
 
-export const PERM_GROUPS: { label: string; resources: PermResource[] }[] = [
-  { label: "Dự án", resources: ["project"] },
-  { label: "Công việc", resources: ["task"] },
-  { label: "Báo cáo", resources: ["report"] },
-  { label: "Rủi ro", resources: ["risk"] },
-  { label: "Nguồn lực", resources: ["resource"] },
-  { label: "Lịch họp", resources: ["meeting"] },
-  { label: "Hệ thống", resources: ["user", "permission"] },
+export const PERM_GROUPS: { label: string; modules: string[] }[] = [
+  { label: "Dự án", modules: ["proj_view", "proj_create", "proj_edit", "proj_phase"] },
+  { label: "Công việc", modules: ["task_create", "task_assign", "task_status", "task_logwork", "task_timesheet"] },
+  { label: "Báo cáo", modules: ["report_view", "report_export", "report_quality"] },
+  { label: "Rủi ro", modules: ["risk_manage", "risk_view"] },
+  { label: "Nguồn lực", modules: ["resource_view"] },
+  { label: "Lịch họp", modules: ["meeting_create", "meeting_view"] },
+  { label: "Hệ thống", modules: ["user_manage", "permission_manage"] },
 ];
 
-export const PERMISSIONS: PermissionItem[] = [
-  // Project
-  { key: "project.view.allow", label: "Xem dự án", group: "Dự án", resource: "project", action: "view" },
-  { key: "project.create.allow", label: "Tạo dự án", group: "Dự án", resource: "project", action: "create" },
-  { key: "project.edit.allow", label: "Sửa dự án", group: "Dự án", resource: "project", action: "edit" },
-  { key: "project.manage.allow", label: "Quản lý phase / cấu trúc", group: "Dự án", resource: "project", action: "manage" },
-
-  // Task
-  { key: "task.view.allow", label: "Xem công việc", group: "Công việc", resource: "task", action: "view" },
-  { key: "task.create.allow", label: "Tạo task", group: "Công việc", resource: "task", action: "create" },
-  { key: "task.edit.allow", label: "Sửa task", group: "Công việc", resource: "task", action: "edit" },
-  { key: "task.assign.allow", label: "Giao việc", group: "Công việc", resource: "task", action: "assign" },
-  { key: "task.logwork.allow", label: "Ghi nhận công việc (log work)", group: "Công việc", resource: "task", action: "logwork" },
-  { key: "task.approve.allow", label: "Duyệt timesheet", group: "Công việc", resource: "task", action: "approve" },
-
-  // Report
-  { key: "report.view.allow", label: "Xem báo cáo", group: "Báo cáo", resource: "report", action: "view" },
-  { key: "report.export.allow", label: "Xuất báo cáo", group: "Báo cáo", resource: "report", action: "export" },
-  { key: "report.manage.allow", label: "Chất lượng / cấu hình báo cáo", group: "Báo cáo", resource: "report", action: "manage" },
-
-  // Risk
-  { key: "risk.view.allow", label: "Xem rủi ro", group: "Rủi ro", resource: "risk", action: "view" },
-  { key: "risk.manage.allow", label: "Quản lý rủi ro", group: "Rủi ro", resource: "risk", action: "manage" },
-
-  // Resource
-  { key: "resource.view.allow", label: "Xem nguồn lực", group: "Nguồn lực", resource: "resource", action: "view" },
-  { key: "resource.manage.allow", label: "Quản lý nguồn lực", group: "Nguồn lực", resource: "resource", action: "manage" },
-
-  // Meeting
-  { key: "meeting.view.allow", label: "Xem lịch họp", group: "Lịch họp", resource: "meeting", action: "view" },
-  { key: "meeting.create.allow", label: "Tạo lịch họp", group: "Lịch họp", resource: "meeting", action: "create" },
-  { key: "meeting.manage.allow", label: "Quản lý lịch họp", group: "Lịch họp", resource: "meeting", action: "manage" },
-
-  // System
-  { key: "user.manage.allow", label: "Quản lý user", group: "Hệ thống", resource: "user", action: "manage" },
-  { key: "permission.manage.allow", label: "Quản lý phân quyền", group: "Hệ thống", resource: "permission", action: "manage" },
+export const PERM_MODULES: PermModule[] = [
+  { id: "proj_view",           label: "Xem dự án",         group: "Dự án" },
+  { id: "proj_create",         label: "Tạo dự án",         group: "Dự án" },
+  { id: "proj_edit",           label: "Sửa dự án",         group: "Dự án" },
+  { id: "proj_phase",          label: "Quản lý phase",     group: "Dự án" },
+  { id: "task_create",         label: "Tạo task",          group: "Công việc" },
+  { id: "task_assign",         label: "Giao việc",         group: "Công việc" },
+  { id: "task_status",         label: "Đổi trạng thái",    group: "Công việc" },
+  { id: "task_logwork",        label: "Log work",          group: "Công việc" },
+  { id: "task_timesheet",      label: "Duyệt timesheet",   group: "Công việc" },
+  { id: "report_view",         label: "Xem báo cáo",       group: "Báo cáo" },
+  { id: "report_export",       label: "Xuất báo cáo",      group: "Báo cáo" },
+  { id: "report_quality",      label: "Chất lượng",        group: "Báo cáo" },
+  { id: "risk_manage",         label: "Quản lý rủi ro",    group: "Rủi ro" },
+  { id: "risk_view",           label: "Xem rủi ro",        group: "Rủi ro" },
+  { id: "resource_view",       label: "Nguồn lực",         group: "Nguồn lực" },
+  { id: "meeting_create",      label: "Tạo lịch họp",      group: "Lịch họp" },
+  { id: "meeting_view",        label: "Xem lịch họp",      group: "Lịch họp" },
+  { id: "user_manage",         label: "Quản lý user",      group: "Hệ thống" },
+  { id: "permission_manage",   label: "Phân quyền",        group: "Hệ thống" },
 ];
 
-export type PermissionMap = Record<string, boolean>; // permissionKey -> granted
+export type PermissionMap = Record<string, boolean>; // moduleId -> granted
 
 export interface RolePermission {
   id: string;
@@ -1003,83 +962,41 @@ export interface RolePermission {
   permissions: PermissionMap;
 }
 
-const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
+const ALL_MODULE_IDS = PERM_MODULES.map((m) => m.id);
 
 function makePerms(allowed: string[]): PermissionMap {
-  return Object.fromEntries(ALL_PERMISSION_KEYS.map((k) => [k, allowed.includes(k)]));
+  return Object.fromEntries(ALL_MODULE_IDS.map((id) => [id, allowed.includes(id)]));
 }
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
   {
     id: "role-ceo", name: "CEO", isDefault: true,
-    permissions: makePerms([
-      "project.view.allow",
-      "task.view.allow",
-      "report.view.allow",
-      "report.export.allow",
-      "risk.view.allow",
-      "resource.view.allow",
-      "meeting.view.allow",
-      "meeting.create.allow",
-    ]),
+    permissions: makePerms(["proj_view", "report_view", "report_export", "risk_view", "resource_view", "meeting_create", "meeting_view"]),
   },
   {
     id: "role-cto", name: "CTO", isDefault: true,
     permissions: makePerms([
-      "project.view.allow",
-      "project.create.allow",
-      "project.edit.allow",
-      "project.manage.allow",
-      "task.view.allow",
-      "task.create.allow",
-      "task.edit.allow",
-      "task.assign.allow",
-      "task.logwork.allow",
-      "task.approve.allow",
-      "report.view.allow",
-      "report.export.allow",
-      "report.manage.allow",
-      "risk.view.allow",
-      "risk.manage.allow",
-      "resource.view.allow",
-      "resource.manage.allow",
-      "meeting.view.allow",
-      "meeting.create.allow",
-      "meeting.manage.allow",
-      "user.manage.allow",
-      "permission.manage.allow",
+      "proj_view", "proj_create", "proj_edit", "proj_phase",
+      "task_create", "task_assign", "task_status", "task_timesheet",
+      "report_view", "report_export", "report_quality",
+      "risk_manage", "risk_view", "resource_view",
+      "meeting_create", "meeting_view",
+      "user_manage", "permission_manage",
     ]),
   },
   {
     id: "role-pm", name: "PM", isDefault: true,
     permissions: makePerms([
-      "project.view.allow",
-      "project.edit.allow",
-      "project.manage.allow",
-      "task.view.allow",
-      "task.create.allow",
-      "task.edit.allow",
-      "task.assign.allow",
-      "task.logwork.allow",
-      "task.approve.allow",
-      "report.view.allow",
-      "report.export.allow",
-      "report.manage.allow",
-      "risk.view.allow",
-      "resource.view.allow",
-      "meeting.view.allow",
-      "meeting.create.allow",
+      "proj_view", "proj_edit", "proj_phase",
+      "task_create", "task_assign", "task_status", "task_timesheet",
+      "report_view", "report_export", "report_quality",
+      "risk_view", "resource_view",
+      "meeting_create", "meeting_view",
     ]),
   },
   {
     id: "role-engineer", name: "Engineer", isDefault: true,
-    permissions: makePerms([
-      "project.view.allow",
-      "task.view.allow",
-      "task.logwork.allow",
-      "meeting.view.allow",
-      "report.view.allow",
-    ]),
+    permissions: makePerms(["proj_view", "task_status", "task_logwork", "meeting_view", "report_view"]),
   },
 ];
 
