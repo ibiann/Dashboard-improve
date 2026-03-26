@@ -5,19 +5,9 @@ import {
   ChevronDown, Bell, Plus, ChevronRight, ChevronLeft,
   Network, LayoutDashboard, Users, CalendarRange, Archive,
   ShieldCheck, AlertTriangle, Lock, Folder, ClipboardList,
-  Layers, LayoutGrid, Clock, Construction, Cpu, LogOut,
+  Layers, LayoutGrid, Clock, Construction, Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/components/auth/auth-context";
-import { useRouter } from "next/navigation";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
 
 // ── L1 content imports ───────────────────────────────────────────────────────
 import { StrategicKpiCard } from "@/components/strategic/strategic-kpi-card";
@@ -444,8 +434,6 @@ function buildBreadcrumbs(
 // ────────────────────────────────────────────────────────────────────────────
 
 export function UnifiedDashboard() {
-  const { isAuthenticated, user, role: authRole, logout } = useAuth();
-  const router = useRouter();
   const [collapsed, setCollapsed]       = useState(false);
   const [viewRole, setViewRole]         = useState<ViewRole>("CTO");
   const [showRoleDrop, setShowRoleDrop] = useState(false);
@@ -482,8 +470,6 @@ export function UnifiedDashboard() {
   }, [showRoleDrop]);
 
   function handleRoleChange(role: ViewRole) {
-    // Restrict view switching to the logged-in account role.
-    if (authRole && role !== authRole) return;
     setViewRole(role);
     setShowRoleDrop(false);
     setSelectedProject(null);
@@ -491,13 +477,6 @@ export function UnifiedDashboard() {
     else if (role === "Engineer") { setEngTab("dashboard"); }
     else { setL1Tab("portfolio"); }
   }
-
-  useEffect(() => {
-    if (!authRole) return;
-    // Sync current view role with logged-in account role.
-    handleRoleChange(authRole);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authRole]);
 
   function handleSelectProject(projectId: string, tab?: string) {
     const p = PM_PROJECTS.find((x) => x.id === projectId) ?? null;
@@ -509,7 +488,7 @@ export function UnifiedDashboard() {
     setPmProject(null);
   }
 
-
+  const breadcrumbs = buildBreadcrumbs(viewRole, l1Tab, pmHomeView, pmProject, pmTab, engTab, selectedProject);
 
   // ── Content renderer ──────────────────────────────────────────────────────
   function renderContent() {
@@ -628,18 +607,15 @@ export function UnifiedDashboard() {
           {/* Role dropdown */}
           <div className="relative shrink-0" ref={roleDropRef}>
             <button
-              onClick={() => {
-                if (!canChangeRole) return;
-                setShowRoleDrop(!showRoleDrop);
-              }}
+              onClick={() => setShowRoleDrop(!showRoleDrop)}
               className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-primary/20 transition-colors"
             >
               Xem: <span className="font-bold">{viewRole}</span>
               <ChevronDown className="w-3.5 h-3.5" />
             </button>
-            {showRoleDrop && canChangeRole && (
+            {showRoleDrop && (
               <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-border rounded-lg shadow-lg z-50">
-                {roleDropdownOptions.map(({ role, title, desc }) => (
+                {ROLE_OPTIONS.map(({ role, title, desc }) => (
                   <button
                     key={role}
                     onClick={() => handleRoleChange(role)}
@@ -690,44 +666,10 @@ export function UnifiedDashboard() {
               <Bell className="w-4 h-4" />
               <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-destructive" />
             </button>
-            {isAuthenticated ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    style={{ backgroundColor: "#E36C25" }}
-                    aria-label="Menu người dùng"
-                  >
-                    {(user?.name?.trim()?.slice(0, 2) ?? "U").toUpperCase()}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="flex flex-col gap-0.5">
-                    <span className="text-sm font-bold">{user?.name ?? "User"}</span>
-                    <span className="text-xs text-muted-foreground">Vai trò: {authRole ?? viewRole}</span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      e.preventDefault();
-                      logout();
-                      router.replace("/login");
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Đăng xuất
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <div
-                className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold select-none"
-                style={{ backgroundColor: "#E36C25" }}
-              >
-                U
-              </div>
-            )}
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
+              style={{ backgroundColor: "#E36C25" }}>
+              AM
+            </div>
           </div>
         </header>
 
