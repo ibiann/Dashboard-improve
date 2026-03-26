@@ -26,9 +26,10 @@ import { PeopleTab } from "@/components/strategic/people-tab";
 import { MeetingsTab } from "@/components/strategic/meetings-tab";
 import { ArchiveTab } from "@/components/strategic/archive-tab";
 import { PermissionsTab } from "@/components/strategic/permissions-tab";
+import { ProjectDetail } from "@/components/strategic/project-detail";
 import {
   L1_PROJECTS, l1GetPortfolioHealth, l1GetGlobalSPI,
-  l1GetResourceEfficiency, l1GetTotalBudget,
+  l1GetResourceEfficiency, l1GetTotalBudget, L1Project,
 } from "@/lib/strategic-mock-data";
 import { Activity, Layers as LayersIcon, Gauge, Users as UsersIcon, DollarSign, ShieldAlert } from "lucide-react";
 
@@ -415,7 +416,8 @@ const PM_TAB_LABELS: Record<PMProjectTab, string> = {
 
 function buildBreadcrumbs(
   role: ViewRole, l1Tab: L1Tab, pmHomeView: PMHomeView,
-  pmProject: PMProject | null, pmTab: PMProjectTab, engTab: string
+  pmProject: PMProject | null, pmTab: PMProjectTab, engTab: string,
+  selectedProject: L1Project | null
 ): string[] {
   if (role === "Engineer") {
     const engLabels: Record<string, string> = {
@@ -425,7 +427,11 @@ function buildBreadcrumbs(
     return ["Engineer", engLabels[engTab] ?? engTab];
   }
   if (role === "CEO" || role === "CTO") {
-    return ["Dashboard", L1_TAB_LABELS[l1Tab]];
+    const base = ["Dashboard", L1_TAB_LABELS[l1Tab]];
+    if (selectedProject && l1Tab === "portfolio") {
+      return [...base, selectedProject.name];
+    }
+    return base;
   }
   if (!pmProject) {
     return ["PM Home", PM_HOME_LABELS[pmHomeView]];
@@ -447,6 +453,12 @@ export function UnifiedDashboard() {
 
   // L1 state
   const [l1Tab, setL1Tab] = useState<L1Tab>("portfolio");
+  const [selectedProject, setSelectedProject] = useState<L1Project | null>(null);
+
+  function handleSetL1Tab(tab: L1Tab) {
+    setL1Tab(tab);
+    setSelectedProject(null);
+  }
 
   // L2 state
   const [pmHomeView, setPmHomeView] = useState<PMHomeView>("projects");
@@ -474,6 +486,7 @@ export function UnifiedDashboard() {
     if (authRole && role !== authRole) return;
     setViewRole(role);
     setShowRoleDrop(false);
+    setSelectedProject(null);
     if (role === "PM") { setPmProject(null); setPmHomeView("projects"); }
     else if (role === "Engineer") { setEngTab("dashboard"); }
     else { setL1Tab("portfolio"); }
@@ -496,9 +509,7 @@ export function UnifiedDashboard() {
     setPmProject(null);
   }
 
-  const breadcrumbs = buildBreadcrumbs(viewRole, l1Tab, pmHomeView, pmProject, pmTab, engTab);
-  const roleDropdownOptions = authRole ? ROLE_OPTIONS.filter((x) => x.role === authRole) : ROLE_OPTIONS;
-  const canChangeRole = roleDropdownOptions.length > 1;
+
 
   // ── Content renderer ──────────────────────────────────────────────────────
   function renderContent() {
@@ -508,12 +519,26 @@ export function UnifiedDashboard() {
 
     if (viewRole === "CEO" || viewRole === "CTO") {
       const role = viewRole;
+      // Project detail view — overlay portfolio table
+      if (l1Tab === "portfolio" && selectedProject) {
+        return (
+          <ProjectDetail
+            project={selectedProject}
+            role={role}
+            onBack={() => setSelectedProject(null)}
+          />
+        );
+      }
       switch (l1Tab) {
         case "portfolio":
           return (
             <div className="space-y-6">
               <L1KPIs role={role} />
-              <PortfolioTab projects={L1_PROJECTS} role={role} />
+              <PortfolioTab
+                projects={L1_PROJECTS}
+                role={role}
+                onSelectProject={(p) => setSelectedProject(p)}
+              />
             </div>
           );
         case "people":     return <PeopleTab />;
@@ -582,7 +607,7 @@ export function UnifiedDashboard() {
             role={viewRole}
             collapsed={collapsed}
             l1Tab={l1Tab}
-            setL1Tab={setL1Tab}
+            setL1Tab={handleSetL1Tab}
             pmHomeView={pmHomeView}
             setPmHomeView={setPmHomeView}
             pmProject={pmProject}
@@ -717,8 +742,8 @@ export function UnifiedDashboard() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto px-4 py-5 md:px-6 space-y-5">
-          {/* Page title (L1 or PM home) — hide for Engineer (self-renders header) and PM project view */}
-          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && (
+          {/* Page title (L1 or PM home) — hide for Engineer, PM project view, and L1 project detail */}
+          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && !selectedProject && (
             <div>
               <h1 className="text-base font-extrabold text-foreground tracking-tight font-sans">
                 {viewRole === "PM" ? PM_HOME_LABELS[pmHomeView] : L1_TAB_LABELS[l1Tab]}
