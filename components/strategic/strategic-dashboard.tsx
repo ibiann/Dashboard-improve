@@ -44,11 +44,13 @@ function PlaceholderView({ title }: { title: string }) {
 export function StrategicDashboard({ initialRole = "CTO" }: { initialRole?: StrategicRole } = {}) {
   const [collapsed, setCollapsed] = useState(false);
   const [role, setRole] = useState<StrategicRole>(initialRole);
+  const [viewMode, setViewMode] = useState<"chairman" | "cto">(initialRole === "CEO" ? "chairman" : "cto");
   const [activeTab, setActiveTab] = useState<StrategicTab>("portfolio");
 
   // Redirect CEO away from CTO-only tabs
   function handleSetRole(r: StrategicRole) {
     setRole(r);
+    setViewMode(r === "CEO" ? "chairman" : "cto");
     if (r === "CEO" && (activeTab === "quality" || activeTab === "risk" || activeTab === "permissions")) {
       setActiveTab("portfolio");
     }
@@ -167,7 +169,7 @@ export function StrategicDashboard({ initialRole = "CTO" }: { initialRole?: Stra
         return (
           <div className="space-y-6">
             {renderKPIs()}
-            <PortfolioTab projects={L1_PROJECTS} role={role} />
+            <PortfolioTab projects={L1_PROJECTS} viewMode={viewMode} />
           </div>
         );
       case "people":

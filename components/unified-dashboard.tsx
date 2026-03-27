@@ -521,7 +521,7 @@ export function UnifiedDashboard() {
               <L1KPIs role={role} />
               <PortfolioTab
                 projects={L1_PROJECTS}
-                role={role}
+                viewMode="cto"
                 onSelectProject={(p) => setSelectedProject(p)}
               />
             </div>

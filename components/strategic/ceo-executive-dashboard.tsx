@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, ArrowLeft, AlertTriangle, Clock, CheckCircle2, TrendingUp, Users, DollarSign, Layers, ShieldAlert } from "lucide-react";
+import { ChevronRight, ArrowLeft, AlertTriangle, Clock, CheckCircle2, TrendingUp, Users, DollarSign, Layers, ShieldAlert, CalendarDays, Send, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { L1_PROJECTS, L1Project } from "@/lib/strategic-mock-data";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CEO-specific mock data (8 featured projects per spec)
@@ -67,6 +68,9 @@ const RECENT_UPDATES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 type RAG = "red" | "amber" | "green";
+type MeetingTarget = (typeof CEO_PROJECTS)[number] | null;
+type MeetingItem = { id: string; title: string; time: string; location: string };
+type CTODraft = { id: string; projectId: string; projectName: string; pm: string; spi: number; proposedSlot: string; status: "pending" | "approved" };
 
 function ragColor(rag: RAG): string {
   return rag === "red" ? "#ef4444" : rag === "amber" ? "#f59e0b" : "#22c55e";
@@ -80,6 +84,7 @@ function spiBadgeStyle(spi: number) {
   if (spi >= 0.85) return { bg: "#fef9c3", text: "#92400e" };
   return { bg: "#fee2e2", text: "#b91c1c" };
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Compact drill-down (CEO clicks a project)
@@ -203,6 +208,15 @@ function CEOProjectDrillDown({ projectId, onBack }: { projectId: string; onBack:
 
 export function CEOExecutiveDashboard() {
   const [drillProjectId, setDrillProjectId] = useState<string | null>(null);
+  const [meetingTarget, setMeetingTarget] = useState<MeetingTarget>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string>("");
+  const [pingStatus, setPingStatus] = useState<string>("");
+  const [meetings, setMeetings] = useState<MeetingItem[]>(MEETINGS.map((m, idx) => ({ ...m, id: `M-${idx + 1}` })));
+  const [quickMode, setQuickMode] = useState<"Sáng" | "Chiều" | "Ngày mai">("Sáng");
+  const [ctoDrafts, setCtoDrafts] = useState<CTODraft[]>([
+    { id: "CD-01", projectId: "P-002", projectName: "Sentinel Gateway v3", pm: "Bob Chen", spi: 0.78, proposedSlot: "2026-03-28 10:30", status: "pending" },
+    { id: "CD-02", projectId: "P-005", projectName: "TerraEdge IoT Platform", pm: "Eve Nkosi", spi: 0.84, proposedSlot: "2026-03-28 15:00", status: "pending" },
+  ]);
 
   if (drillProjectId) {
     return (
@@ -222,6 +236,53 @@ export function CEOExecutiveDashboard() {
   const redCount     = CEO_PROJECTS.filter((p) => p.rag === "red").length;
   const amberCount   = CEO_PROJECTS.filter((p) => p.rag === "amber").length;
   const greenCount   = CEO_PROJECTS.filter((p) => p.rag === "green").length;
+
+  const highRiskProjects = CEO_PROJECTS.filter((p) => p.spi < 0.7);
+  const pendingDecisionCount = DECISIONS.length + highRiskProjects.filter((p) => !DECISIONS.some((d) => d.projectId === p.id)).length + ctoDrafts.filter((d) => d.status === "pending").length;
+
+  function suggestedSlots(projectId: string): string[] {
+    const seed = Number(projectId.replace("P-", "")) % 3;
+    if (seed === 0) return ["09:00 hôm nay", "14:30 hôm nay", "09:30 ngày mai"];
+    if (seed === 1) return ["10:30 hôm nay", "15:00 hôm nay", "08:30 ngày mai"];
+    return ["11:00 hôm nay", "16:00 hôm nay", "10:00 ngày mai"];
+  }
+
+  function openMeetingSheet(projectId: string) {
+    const target = CEO_PROJECTS.find((x) => x.id === projectId) ?? null;
+    if (!target) return;
+    const slots = suggestedSlots(projectId);
+    setMeetingTarget(target);
+    setSelectedSlot(slots[0] ?? "");
+    setPingStatus("");
+  }
+
+  function postponeMeeting(minutes: number) {
+    setMeetings((prev) => {
+      if (!prev.length) return prev;
+      const first = prev[0];
+      const [h, m] = first.time.split(":").map(Number);
+      const dt = new Date();
+      dt.setHours(h, m + minutes, 0, 0);
+      const hh = String(dt.getHours()).padStart(2, "0");
+      const mm = String(dt.getMinutes()).padStart(2, "0");
+      return [{ ...first, time: `${hh}:${mm}` }, ...prev.slice(1)];
+    });
+  }
+
+  function pushMeetingTomorrow() {
+    setMeetings((prev) => {
+      if (!prev.length) return prev;
+      const first = prev[0];
+      return [{ ...first, title: `${first.title} (dời sang mai)` }, ...prev.slice(1)];
+    });
+  }
+
+  function approveDraft(draft: CTODraft) {
+    setCtoDrafts((prev) => prev.map((d) => (d.id === draft.id ? { ...d, status: "approved" } : d)));
+    openMeetingSheet(draft.projectId);
+    setSelectedSlot(draft.proposedSlot);
+    setPingStatus(`Đã duyệt nhanh đề xuất của CTO cho ${draft.projectName}.`);
+  }
 
   // Sort: red → amber → green
   const sortedProjects = [...CEO_PROJECTS].sort((a, b) => {
@@ -260,11 +321,26 @@ export function CEOExecutiveDashboard() {
             ))}
           </div>
 
+          <div className="rounded-lg border border-border bg-muted/30 p-3">
+            <div className="flex items-center gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5 text-[#063986]" />
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Quick Postpone</p>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-foreground">
+              {meetings[0]?.title ?? "Chưa có lịch gần nhất"} · <span className="font-mono">{meetings[0]?.time ?? "--:--"}</span>
+            </p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <button onClick={() => postponeMeeting(15)} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">+15m</button>
+              <button onClick={() => postponeMeeting(30)} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">+30m</button>
+              <button onClick={pushMeetingTomorrow} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">Dời sang mai</button>
+            </div>
+          </div>
+
           <div className="border-t border-border pt-3">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Lịch họp hôm nay</p>
             <div className="space-y-1.5">
-              {MEETINGS.map((m) => (
-                <div key={m.time} className="flex items-center gap-2 text-xs">
+              {meetings.map((m) => (
+                <div key={m.id} className="flex items-center gap-2 text-xs">
                   <span className="font-mono font-bold text-primary w-10 shrink-0">{m.time}</span>
                   <span className="flex-1 font-medium text-foreground">{m.title}</span>
                   <span className="text-muted-foreground text-[10px]">{m.location}</span>
@@ -280,7 +356,7 @@ export function CEOExecutiveDashboard() {
             <AlertTriangle className="w-4 h-4 text-warning" />
             <h3 className="text-sm font-bold text-foreground">Cần quyết định</h3>
             <span className="ml-1 text-[10px] font-bold bg-destructive text-white px-1.5 py-0.5 rounded-full">
-              {DECISIONS.length}
+              {pendingDecisionCount}
             </span>
           </div>
           <div className="divide-y divide-border">
@@ -311,11 +387,86 @@ export function CEOExecutiveDashboard() {
                       <p className="text-[11px] text-muted-foreground leading-relaxed">{d.detail}</p>
                       <p className="text-[10px] text-muted-foreground mt-1">Từ: <span className="font-semibold">{d.from}</span></p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform mt-1" />
+                    <div className="flex flex-col items-end gap-2">
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform mt-1" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMeetingSheet(d.projectId);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                      >
+                        <CalendarDays className="w-3 h-3" />
+                        Lên lịch họp
+                      </button>
+                    </div>
                   </div>
                 </button>
               );
             })}
+            {highRiskProjects
+              .filter((p) => !DECISIONS.some((d) => d.projectId === p.id))
+              .map((p) => (
+                <div
+                  key={`auto-${p.id}`}
+                  className="w-full text-left px-5 py-3.5"
+                  style={{ backgroundColor: "#fff5f5", borderLeft: "3px solid #fca5a5" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-red-100 text-red-700">
+                          Tự động
+                        </span>
+                        <span className="text-xs font-semibold text-foreground truncate">
+                          {p.name} có SPI thấp ({p.spi.toFixed(2)})
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Cần họp đánh giá tiến độ với PM để xử lý rủi ro lịch trình.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => openMeetingSheet(p.id)}
+                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                    >
+                      <CalendarDays className="w-3 h-3" />
+                      Lên lịch họp
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {ctoDrafts
+              .filter((d) => d.status === "pending")
+              .map((d) => (
+                <div
+                  key={d.id}
+                  className="w-full text-left px-5 py-3.5"
+                  style={{ backgroundColor: "#eff6ff", borderLeft: "3px solid #93c5fd" }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-blue-100 text-blue-700">
+                          CTO đề xuất
+                        </span>
+                        <span className="text-xs font-semibold text-foreground truncate">
+                          {d.projectName} · <span className="font-mono">SPI {d.spi.toFixed(2)}</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Khung giờ đề xuất: <span className="font-mono">{d.proposedSlot}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => approveDraft(d)}
+                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                    >
+                      Duyệt 1 chạm
+                    </button>
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
       </div>
@@ -353,7 +504,7 @@ export function CEOExecutiveDashboard() {
             iconBg: totalOverdue > 0 ? "#fee2e2" : "#dcfce7",
             iconColor: totalOverdue > 0 ? "#b91c1c" : "#15803d",
             value: `${totalOverdue}`,
-            sub: `${DECISIONS.filter(d => d.urgency === "high" || d.urgency === "medium").length} chờ duyệt`,
+            sub: `${pendingDecisionCount} mục chờ quyết định`,
           },
           {
             title: "NHÂN SỰ",
@@ -383,9 +534,9 @@ export function CEOExecutiveDashboard() {
           <h3 className="text-sm font-bold text-foreground">Tình trạng dự án</h3>
           <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             {[
-              { rag: "green" as RAG, label: "On Track" },
-              { rag: "amber" as RAG, label: "At Risk" },
-              { rag: "red"   as RAG, label: "Delayed" },
+              { rag: "green" as RAG, label: "Đúng tiến độ" },
+              { rag: "amber" as RAG, label: "Rủi ro" },
+              { rag: "red"   as RAG, label: "Chậm tiến độ" },
             ].map(({ rag, label }) => (
               <span key={rag} className="flex items-center gap-1">
                 {ragDot(rag)}
@@ -468,6 +619,18 @@ export function CEOExecutiveDashboard() {
                       <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" />
                     )}
                   </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openMeetingSheet(p.id);
+                    }}
+                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                    aria-label="Lên lịch họp"
+                    title="Lên lịch họp"
+                  >
+                    <CalendarDays className="w-3.5 h-3.5" />
+                  </button>
 
                   {/* Chevron */}
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
@@ -554,6 +717,99 @@ export function CEOExecutiveDashboard() {
           </div>
         </div>
       </div>
+
+      <Sheet open={!!meetingTarget} onOpenChange={(o) => !o && setMeetingTarget(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          {meetingTarget && (
+            <div className="flex h-full flex-col">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle className="text-base font-bold">Lên lịch họp đánh giá</SheetTitle>
+                <SheetDescription className="text-xs">
+                  Giao diện rút gọn: chọn nhanh khung giờ và gửi thông báo ngay.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-3 overflow-auto p-4 text-xs">
+                <div className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-[10px] text-muted-foreground">Dự án</p>
+                  <p className="font-semibold text-foreground">{meetingTarget.name}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    PM: {meetingTarget.pm} · SPI hiện tại: <span className="font-mono">{meetingTarget.spi.toFixed(2)}</span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-foreground">3 khung giờ gợi ý</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {suggestedSlots(meetingTarget.id).map((slot) => (
+                      <button
+                        key={slot}
+                        onClick={() => setSelectedSlot(slot)}
+                        className={cn(
+                          "rounded-md border px-3 py-2 text-left font-mono transition-colors",
+                          selectedSlot === slot ? "border-[#063986] bg-blue-50 text-[#063986]" : "border-border hover:bg-muted"
+                        )}
+                      >
+                        {slot}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-foreground">Tác vụ nhanh</p>
+                  <div className="flex items-center gap-2">
+                    {(["Sáng", "Chiều", "Ngày mai"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          setQuickMode(m);
+                          const quickSlot = m === "Sáng" ? "09:00 hôm nay" : m === "Chiều" ? "15:00 hôm nay" : "09:00 ngày mai";
+                          setSelectedSlot(quickSlot);
+                        }}
+                        className={cn(
+                          "rounded-md border px-2.5 py-1 text-[10px] font-semibold",
+                          quickMode === m ? "border-[#063986] bg-[#063986] text-white" : "border-border hover:bg-muted"
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-1 text-[11px] font-semibold text-foreground">Nội dung Telegram (mock)</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Chairman has summoned you for {meetingTarget.name} review at {selectedSlot || "khung giờ mặc định"}. Be prepared. Link: [Google Meet]
+                  </p>
+                </div>
+
+                {pingStatus && (
+                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-[11px] text-green-700">
+                    {pingStatus}
+                  </div>
+                )}
+              </div>
+
+              <SheetFooter className="border-t border-border">
+                <button
+                  onClick={() => {
+                    const meetLink = `https://meet.google.com/lancs-${meetingTarget.id.toLowerCase().replace("p-", "")}-${Date.now().toString(36).slice(-5)}`;
+                    setPingStatus(
+                      `Đã tạo Meet: ${meetLink}. Đã gửi Telegram cho người tham gia: "Chairman has summoned you for ${meetingTarget.name} review at ${selectedSlot || "khung giờ mặc định"}. Be prepared. Link: ${meetLink}"`
+                    );
+                  }}
+                  className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-[#E36C25] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Xác nhận & Ping Telegram
+                </button>
+              </SheetFooter>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
     </div>
   );

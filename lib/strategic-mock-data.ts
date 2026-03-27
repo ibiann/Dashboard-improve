@@ -1007,7 +1007,9 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
 export function l1GetPortfolioHealth(projects: L1Project[]): number {
   const active = projects.filter((p) => !p.closed);
   if (!active.length) return 0;
-  const avg = active.reduce((s, p) => s + p.progress / p.plannedProgress, 0) / active.length;
+  const avg =
+    active.reduce((s, p) => s + safeDivide(p.progress, p.plannedProgress, 0), 0) /
+    active.length;
   return Math.min(Math.round(avg * 100), 100);
 }
 
@@ -1029,4 +1031,20 @@ export function l1GetTotalBudget(projects: L1Project[]) {
     (acc, p) => ({ total: acc.total + p.budget.total, spent: acc.spent + p.budget.spent }),
     { total: 0, spent: 0 }
   );
+}
+
+export function safeDivide(numerator: number, denominator: number, fallback = 0): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return fallback;
+  }
+  return numerator / denominator;
+}
+
+export function safePercent(numerator: number, denominator: number, fallback = 0): number {
+  return Math.round(safeDivide(numerator, denominator, fallback) * 100);
+}
+
+export function calculateSPI(earnedValue: number, plannedValue: number): number {
+  const spi = safeDivide(earnedValue, plannedValue, 0);
+  return Math.round(spi * 100) / 100;
 }

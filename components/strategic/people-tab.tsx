@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   Search, X, Mail, Phone, Calendar, Star,
   ChevronRight, ChevronLeft, List, GitFork, ChevronDown,
