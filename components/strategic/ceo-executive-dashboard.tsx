@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, ArrowLeft, AlertTriangle, Clock, CheckCircle2, TrendingUp, Users, DollarSign, Layers, ShieldAlert, CalendarDays, Send, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { L1_PROJECTS, L1Project } from "@/lib/strategic-mock-data";
+import { EMPLOYEES, L1_PROJECTS, L1Project, avgKPI } from "@/lib/strategic-mock-data";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CEO-specific mock data (8 featured projects per spec)
@@ -71,6 +72,25 @@ type RAG = "red" | "amber" | "green";
 type MeetingTarget = (typeof CEO_PROJECTS)[number] | null;
 type MeetingItem = { id: string; title: string; time: string; location: string };
 type CTODraft = { id: string; projectId: string; projectName: string; pm: string; spi: number; proposedSlot: string; status: "pending" | "approved" };
+type StaffFilter = "top10" | "risk" | "overload";
+type DashboardView = "portfolio" | "staff";
+
+// #region agent log
+function sendDebug(payload: Record<string, unknown>) {
+  fetch("http://127.0.0.1:7885/ingest/716782fa-1337-4ad3-b0ee-c627486caea9", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Debug-Session-Id": "043cf0",
+    },
+    body: JSON.stringify({
+      sessionId: "043cf0",
+      timestamp: Date.now(),
+      ...payload,
+    }),
+  }).catch(() => {});
+}
+// #endregion
 
 function ragColor(rag: RAG): string {
   return rag === "red" ? "#ef4444" : rag === "amber" ? "#f59e0b" : "#22c55e";
@@ -208,11 +228,73 @@ function CEOProjectDrillDown({ projectId, onBack }: { projectId: string; onBack:
 
 export function CEOExecutiveDashboard() {
   const [drillProjectId, setDrillProjectId] = useState<string | null>(null);
+  const [dashboardView, setDashboardView] = useState<DashboardView>("portfolio");
   const [meetingTarget, setMeetingTarget] = useState<MeetingTarget>(null);
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [pingStatus, setPingStatus] = useState<string>("");
+  const [meetingMessage, setMeetingMessage] = useState<string>("");
+  const [customMeetingTime, setCustomMeetingTime] = useState<string>("");
   const [meetings, setMeetings] = useState<MeetingItem[]>(MEETINGS.map((m, idx) => ({ ...m, id: `M-${idx + 1}` })));
   const [quickMode, setQuickMode] = useState<"Sáng" | "Chiều" | "Ngày mai">("Sáng");
+  const [staffFilter, setStaffFilter] = useState<StaffFilter>("top10");
+  const [staffScrollTop, setStaffScrollTop] = useState(0);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [projectScrollTop, setProjectScrollTop] = useState(0);
+
+  // #region agent log
+  if (typeof window !== "undefined" && !(window as Record<string, unknown>).__ceoDebugRender043cf0) {
+    (window as Record<string, unknown>).__ceoDebugRender043cf0 = true;
+    sendDebug({
+      runId: "pre-fix",
+      hypothesisId: "H4",
+      location: "components/strategic/ceo-executive-dashboard.tsx:render",
+      message: "Component render reached",
+      data: {
+        dashboardView,
+        decisionsCount: DECISIONS.length,
+        projectCount: CEO_PROJECTS.length,
+      },
+    });
+  }
+
+  useEffect(() => {
+    sendDebug({
+      runId: "pre-fix",
+      hypothesisId: "H1",
+      location: "components/strategic/ceo-executive-dashboard.tsx:CEOExecutiveDashboard",
+      message: "Render structure check for nested button in decisions cards",
+      data: {
+        hasDecisionOuterButton: true,
+        hasDecisionInnerScheduleButton: true,
+        decisionsCount: DECISIONS.length,
+      },
+    });
+
+    sendDebug({
+      runId: "pre-fix",
+      hypothesisId: "H2",
+      location: "components/strategic/ceo-executive-dashboard.tsx:CEOExecutiveDashboard",
+      message: "Render structure check for nested button in project table rows",
+      data: {
+        hasProjectRowOuterButton: true,
+        hasProjectRowInnerCalendarButton: true,
+        projectsCount: CEO_PROJECTS.length,
+      },
+    });
+
+    sendDebug({
+      runId: "pre-fix",
+      hypothesisId: "H3",
+      location: "components/strategic/ceo-executive-dashboard.tsx:CEOExecutiveDashboard",
+      message: "Control hypothesis for non-button sources",
+      data: {
+        usesSheetComponent: true,
+        suspectedSheetNestedButtonSource: false,
+        suspectedDrawerNestedButtonSource: false,
+      },
+    });
+  }, []);
+  // #endregion
   const [ctoDrafts, setCtoDrafts] = useState<CTODraft[]>([
     { id: "CD-01", projectId: "P-002", projectName: "Sentinel Gateway v3", pm: "Bob Chen", spi: 0.78, proposedSlot: "2026-03-28 10:30", status: "pending" },
     { id: "CD-02", projectId: "P-005", projectName: "TerraEdge IoT Platform", pm: "Eve Nkosi", spi: 0.84, proposedSlot: "2026-03-28 15:00", status: "pending" },
@@ -253,8 +335,46 @@ export function CEOExecutiveDashboard() {
     const slots = suggestedSlots(projectId);
     setMeetingTarget(target);
     setSelectedSlot(slots[0] ?? "");
+    setCustomMeetingTime("");
+    setMeetingMessage("");
     setPingStatus("");
   }
+
+  const projectSpiMap = Object.fromEntries(L1_PROJECTS.map((p) => [p.id, p.spi]));
+
+  const staffRows = EMPLOYEES.filter((e) => e.status === "active").map((e) => {
+    const avgSpi =
+      e.assignedProjects.length > 0
+        ? e.assignedProjects.reduce((s, p) => s + (projectSpiMap[p.id] ?? 1), 0) / e.assignedProjects.length
+        : 1;
+    const reliability = avgKPI(e.kpi);
+    const loadCapacity = Math.round(70 + e.assignedProjects.length * 22 + Math.max(0, 85 - reliability) * 0.45);
+    const atRisk = avgSpi < 0.7 || loadCapacity > 110;
+    return { id: e.id, name: e.name, dept: e.dept, role: e.role, avgSpi, reliability, loadCapacity, projects: e.assignedProjects, atRisk };
+  });
+
+  const filteredStaff = (() => {
+    if (staffFilter === "risk") return staffRows.filter((s) => s.atRisk);
+    if (staffFilter === "overload") return staffRows.filter((s) => s.loadCapacity > 110);
+    return [...staffRows].sort((a, b) => b.reliability - a.reliability).slice(0, 10);
+  })();
+
+  const groupedStaff = filteredStaff.reduce<Record<string, typeof filteredStaff>>((acc, s) => {
+    (acc[s.dept] = acc[s.dept] ?? []).push(s);
+    return acc;
+  }, {});
+
+  const flatStaffRows = Object.entries(groupedStaff).flatMap(([dept, rows]) => [
+    { kind: "group" as const, dept },
+    ...rows.map((staff) => ({ kind: "staff" as const, staff })),
+  ]);
+
+  const STAFF_ROW_HEIGHT = 36;
+  const STAFF_VIEWPORT_HEIGHT = 500;
+  const staffStart = Math.max(0, Math.floor(staffScrollTop / STAFF_ROW_HEIGHT) - 8);
+  const staffEnd = Math.min(flatStaffRows.length, Math.ceil((staffScrollTop + STAFF_VIEWPORT_HEIGHT) / STAFF_ROW_HEIGHT) + 8);
+  const visibleStaffRows = flatStaffRows.slice(staffStart, staffEnd);
+  const selectedEmployee = staffRows.find((s) => s.id === selectedEmployeeId) ?? null;
 
   function postponeMeeting(minutes: number) {
     setMeetings((prev) => {
@@ -285,14 +405,48 @@ export function CEOExecutiveDashboard() {
   }
 
   // Sort: red → amber → green
-  const sortedProjects = [...CEO_PROJECTS].sort((a, b) => {
+  const sortedProjects = useMemo(() => {
     const o: Record<RAG, number> = { red: 0, amber: 1, green: 2 };
-    return o[a.rag] - o[b.rag];
-  });
+    return [...CEO_PROJECTS].sort((a, b) => o[a.rag] - o[b.rag]);
+  }, []);
+
+  const PROJECT_ROW_HEIGHT = 52;
+  const PROJECT_VIEWPORT_HEIGHT = 430;
+  const projectStart = Math.max(0, Math.floor(projectScrollTop / PROJECT_ROW_HEIGHT) - 8);
+  const projectEnd = Math.min(
+    sortedProjects.length,
+    Math.ceil((projectScrollTop + PROJECT_VIEWPORT_HEIGHT) / PROJECT_ROW_HEIGHT) + 8
+  );
+  const visibleProjects = sortedProjects.slice(projectStart, projectEnd);
 
   return (
     <div className="space-y-5 max-w-7xl mx-auto">
+      <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-2.5">
+        <h2 className="text-sm font-bold text-[#063986]">Level 1 - CEO Dashboard</h2>
+        <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+          <button
+            onClick={() => setDashboardView("portfolio")}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
+              dashboardView === "portfolio" ? "bg-[#063986] text-white" : "text-muted-foreground hover:bg-card"
+            )}
+          >
+            Project Portfolio
+          </button>
+          <button
+            onClick={() => setDashboardView("staff")}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
+              dashboardView === "staff" ? "bg-[#063986] text-white" : "text-muted-foreground hover:bg-card"
+            )}
+          >
+            Staff KPI View
+          </button>
+        </div>
+      </div>
 
+      {dashboardView === "portfolio" && (
+      <>
       {/* ── ROW 1: Greeting + Decisions ───────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -545,99 +699,83 @@ export function CEOExecutiveDashboard() {
             ))}
           </div>
         </div>
-        <div className="divide-y divide-border">
-          {sortedProjects.map((p) => {
-            const rc = ragColor(p.rag);
-            const budgetPct = Math.round((p.budgetSpent / p.budgetTotal) * 100);
-            const spiStyle  = spiBadgeStyle(p.spi);
-            return (
-              <button
-                key={p.id}
-                onClick={() => setDrillProjectId(p.id)}
-                className="w-full text-left px-4 py-3 hover:bg-muted/30 transition-colors group"
-              >
-                <div className="flex items-center gap-3">
-                  {/* RAG dot */}
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: rc }} />
+        <div className="grid grid-cols-12 px-4 py-2 text-[10px] text-muted-foreground border-b border-border bg-muted/20">
+          <div className="col-span-4">Dự án</div>
+          <div className="col-span-4 text-center">Actual / Planned</div>
+          <div className="col-span-2 text-center">Variance (Δ)</div>
+          <div className="col-span-1 text-center">SPI</div>
+          <div className="col-span-1 text-center">Action</div>
+        </div>
+        <div className="overflow-y-auto" style={{ height: PROJECT_VIEWPORT_HEIGHT }} onScroll={(e) => setProjectScrollTop(e.currentTarget.scrollTop)}>
+          <div style={{ height: sortedProjects.length * PROJECT_ROW_HEIGHT, position: "relative" }}>
+            {visibleProjects.map((p, idx) => {
+              const i = projectStart + idx;
+              const top = i * PROJECT_ROW_HEIGHT;
+              const rc = ragColor(p.rag);
+              const delta = p.progress - p.planned;
+              const deltaColor = delta < 0 ? "text-red-600" : delta > 0 ? "text-green-600" : "text-gray-500";
+              const plannedPos = Math.max(0, Math.min(100, p.planned));
+              const actualPos = Math.max(0, Math.min(100, p.progress));
+              const negGapWidth = delta < 0 ? Math.abs(delta) : 0;
+              const negGapLeft = delta < 0 ? p.progress : 0;
 
-                  {/* Name + PM */}
-                  <div className="w-44 shrink-0">
-                    <p className="text-xs font-semibold text-foreground truncate">{p.name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{p.pm} · {p.cat}</p>
-                  </div>
-
-                  {/* Progress bar + planned marker */}
-                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                    <div className="relative h-2 bg-muted rounded-full overflow-visible">
-                      <div
-                        className="absolute h-full rounded-full"
-                        style={{ width: `${p.progress}%`, backgroundColor: rc, opacity: 0.85 }}
-                      />
-                      {/* Planned marker */}
-                      <div
-                        className="absolute top-[-2px] bottom-[-2px] w-0.5 bg-foreground/30 rounded-full"
-                        style={{ left: `${p.planned}%` }}
-                        title={`Kế hoạch: ${p.planned}%`}
-                      />
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setDrillProjectId(p.id)}
+                  className="absolute left-0 right-0 grid grid-cols-12 items-center px-4 border-b border-border hover:bg-muted/25 text-left group"
+                  style={{ top, height: PROJECT_ROW_HEIGHT }}
+                >
+                  <div className="col-span-4 min-w-0 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: rc }} />
+                      <p className="text-xs font-semibold text-foreground truncate">{p.name}</p>
                     </div>
-                    <p className="text-[9px] text-muted-foreground">
-                      Thực tế: <span className="font-semibold font-mono">{p.progress}%</span>
-                      <span className="mx-1 opacity-40">|</span>
-                      Kế hoạch: <span className="font-mono">{p.planned}%</span>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {p.pm} · {p.cat} · {p.overdue} task trễ
                     </p>
                   </div>
 
-                  {/* SPI badge */}
-                  <span
-                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shrink-0 w-12 text-center"
-                    style={{ backgroundColor: spiStyle.bg, color: spiStyle.text }}
-                  >
-                    {p.spi.toFixed(2)}
-                  </span>
-
-                  {/* Budget mini */}
-                  <div className="w-16 shrink-0 flex flex-col gap-0.5">
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${budgetPct}%`,
-                          backgroundColor: budgetPct > 85 ? "#ef4444" : "#4CABEB",
-                        }}
-                      />
+                  <div className="col-span-4 px-2">
+                    <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+                      {delta < 0 && (
+                        <div
+                          className="absolute top-0 bottom-0 bg-[#E36C25]/20"
+                          style={{ left: `${negGapLeft}%`, width: `${negGapWidth}%` }}
+                        />
+                      )}
+                      <div className="absolute top-0 bottom-0 rounded-full" style={{ width: `${actualPos}%`, backgroundColor: rc }} />
+                      <div className="absolute top-[-1px] bottom-[-1px] w-[1px] bg-foreground/50" style={{ left: `${plannedPos}%` }} />
                     </div>
-                    <p className="text-[9px] text-muted-foreground font-mono">B:{budgetPct}%</p>
+                    <p className="mt-1 text-[9px] text-muted-foreground font-mono">{p.progress}% / {p.planned}%</p>
                   </div>
 
-                  {/* Overdue badge */}
-                  <div className="w-14 shrink-0 text-center">
-                    {p.overdue > 0 ? (
-                      <span className="text-[10px] font-bold text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: "#ef4444" }}>
-                        {p.overdue} trễ
-                      </span>
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4 text-green-500 mx-auto" />
-                    )}
+                  <div className={cn("col-span-2 text-center font-mono text-xs font-semibold", deltaColor)}>
+                    {delta > 0 ? `+${delta}%` : `${delta}%`}
                   </div>
 
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openMeetingSheet(p.id);
-                    }}
-                    className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
-                    aria-label="Lên lịch họp"
-                    title="Lên lịch họp"
-                  >
-                    <CalendarDays className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="col-span-1 text-center">
+                    <span className="font-mono font-extrabold text-sm text-foreground">{p.spi.toFixed(2)}</span>
+                  </div>
 
-                  {/* Chevron */}
-                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                </div>
-              </button>
-            );
-          })}
+                  <div className="col-span-1 flex items-center justify-center gap-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openMeetingSheet(p.id);
+                      }}
+                      className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+                      aria-label="Lên lịch họp"
+                      title="Lên lịch họp"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                    </button>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -717,6 +855,75 @@ export function CEOExecutiveDashboard() {
           </div>
         </div>
       </div>
+      </>
+      )}
+
+      {dashboardView === "staff" && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">Avg SPI</p>
+              <p className="font-mono text-lg font-bold">{(filteredStaff.reduce((s, x) => s + x.avgSpi, 0) / Math.max(filteredStaff.length, 1)).toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">Reliability Score</p>
+              <p className="font-mono text-lg font-bold">{Math.round(filteredStaff.reduce((s, x) => s + x.reliability, 0) / Math.max(filteredStaff.length, 1))}%</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2">
+              <p className="text-[10px] text-muted-foreground">Load Capacity</p>
+              <p className="font-mono text-lg font-bold">{Math.round(filteredStaff.reduce((s, x) => s + x.loadCapacity, 0) / Math.max(filteredStaff.length, 1))}%</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button onClick={() => setStaffFilter("top10")} className={cn("rounded-md border px-2.5 py-1 text-[11px] font-semibold", staffFilter === "top10" ? "bg-[#063986] text-white border-[#063986]" : "border-border")}>Top 10 Performance</button>
+            <button onClick={() => setStaffFilter("risk")} className={cn("rounded-md border px-2.5 py-1 text-[11px] font-semibold", staffFilter === "risk" ? "bg-[#063986] text-white border-[#063986]" : "border-border")}>At-Risk Staff</button>
+            <button onClick={() => setStaffFilter("overload")} className={cn("rounded-md border px-2.5 py-1 text-[11px] font-semibold", staffFilter === "overload" ? "bg-[#063986] text-white border-[#063986]" : "border-border")}>Overloaded Staff</button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-[#e5e7eb] bg-card">
+            <div className="grid grid-cols-12 border-b border-[#e5e7eb] bg-muted/20 px-3 text-[11px] font-semibold text-muted-foreground" style={{ height: STAFF_ROW_HEIGHT }}>
+              <div className="col-span-4 flex items-center">Nhân sự</div>
+              <div className="col-span-2 flex items-center justify-center">Avg SPI</div>
+              <div className="col-span-3 flex items-center justify-center">Reliability</div>
+              <div className="col-span-3 flex items-center justify-center">Load Capacity</div>
+            </div>
+
+            <div className="overflow-y-auto" style={{ height: STAFF_VIEWPORT_HEIGHT }} onScroll={(e) => setStaffScrollTop(e.currentTarget.scrollTop)}>
+              <div style={{ height: flatStaffRows.length * STAFF_ROW_HEIGHT, position: "relative" }}>
+                {visibleStaffRows.map((row, idx) => {
+                  const i = staffStart + idx;
+                  const top = i * STAFF_ROW_HEIGHT;
+                  if (row.kind === "group") {
+                    return (
+                      <div key={`g-${row.dept}-${i}`} className="absolute left-0 right-0 border-b border-[#e5e7eb] bg-muted/35 px-3 text-[11px] font-semibold text-[#063986]" style={{ top, height: STAFF_ROW_HEIGHT, lineHeight: `${STAFF_ROW_HEIGHT}px` }}>
+                        {row.dept}
+                      </div>
+                    );
+                  }
+                  const s = row.staff;
+                  return (
+                    <button
+                      key={`s-${s.id}-${i}`}
+                      onClick={() => setSelectedEmployeeId(s.id)}
+                      className={cn(
+                        "absolute left-0 right-0 grid grid-cols-12 items-center border-b border-[#e5e7eb] px-3 text-xs text-left hover:bg-muted/20",
+                        (s.avgSpi < 0.7 || s.loadCapacity > 110) && "bg-[#E36C25]/10"
+                      )}
+                      style={{ top, height: STAFF_ROW_HEIGHT }}
+                    >
+                      <div className="col-span-4 truncate font-medium">{s.name}</div>
+                      <div className="col-span-2 text-center font-mono">{s.avgSpi.toFixed(2)}</div>
+                      <div className="col-span-3 text-center font-mono">{s.reliability}%</div>
+                      <div className={cn("col-span-3 text-center font-mono", s.loadCapacity > 110 && "text-red-600 font-semibold")}>{s.loadCapacity}%</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Sheet open={!!meetingTarget} onOpenChange={(o) => !o && setMeetingTarget(null)}>
         <SheetContent side="right" className="w-full sm:max-w-md">
@@ -778,11 +985,37 @@ export function CEOExecutiveDashboard() {
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">Giờ tùy chọn</label>
+                  <input
+                    type="datetime-local"
+                    value={customMeetingTime}
+                    onChange={(e) => setCustomMeetingTime(e.target.value)}
+                    className="w-full rounded-md border border-border px-2 py-1.5 text-xs font-mono"
+                  />
+                  <button
+                    onClick={() => customMeetingTime && setSelectedSlot(customMeetingTime.replace("T", " "))}
+                    className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted"
+                  >
+                    Dùng giờ này
+                  </button>
+                </div>
+
                 <div className="rounded-lg border border-border p-3">
                   <p className="mb-1 text-[11px] font-semibold text-foreground">Nội dung Telegram (mock)</p>
                   <p className="text-[10px] text-muted-foreground">
                     Chairman has summoned you for {meetingTarget.name} review at {selectedSlot || "khung giờ mặc định"}. Be prepared. Link: [Google Meet]
                   </p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-foreground">Nội dung nhắn thêm</label>
+                  <textarea
+                    value={meetingMessage}
+                    onChange={(e) => setMeetingMessage(e.target.value)}
+                    placeholder="Nhập ghi chú hoặc yêu cầu chuẩn bị cho cuộc họp..."
+                    className="min-h-[88px] w-full rounded-md border border-border px-2 py-1.5 text-xs"
+                  />
                 </div>
 
                 {pingStatus && (
@@ -796,14 +1029,73 @@ export function CEOExecutiveDashboard() {
                 <button
                   onClick={() => {
                     const meetLink = `https://meet.google.com/lancs-${meetingTarget.id.toLowerCase().replace("p-", "")}-${Date.now().toString(36).slice(-5)}`;
+                    const customNote = meetingMessage.trim() ? ` Ghi chú thêm: ${meetingMessage.trim()}` : "";
                     setPingStatus(
-                      `Đã tạo Meet: ${meetLink}. Đã gửi Telegram cho người tham gia: "Chairman has summoned you for ${meetingTarget.name} review at ${selectedSlot || "khung giờ mặc định"}. Be prepared. Link: ${meetLink}"`
+                      `Đã tạo Meet: ${meetLink}. Đã gửi Telegram cho người tham gia: "Chairman has summoned you for ${meetingTarget.name} review at ${selectedSlot || "khung giờ mặc định"}. Be prepared. Link: ${meetLink}.${customNote}"`
                     );
                   }}
                   className="inline-flex w-full items-center justify-center gap-1 rounded-md bg-[#E36C25] px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
                 >
                   <Send className="w-3.5 h-3.5" />
                   Xác nhận & Ping Telegram
+                </button>
+              </SheetFooter>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!selectedEmployee} onOpenChange={(o) => !o && setSelectedEmployeeId(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          {selectedEmployee && (
+            <div className="flex h-full flex-col">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle className="text-base font-bold">{selectedEmployee.name}</SheetTitle>
+                <SheetDescription className="text-xs">
+                  {selectedEmployee.role} · {selectedEmployee.dept}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-4 overflow-auto p-4 text-xs">
+                <div className="h-52 rounded-lg border border-border p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={[
+                      { metric: "SPI", value: Number((selectedEmployee.avgSpi * 100).toFixed(0)) },
+                      { metric: "Reliability", value: selectedEmployee.reliability },
+                      { metric: "Load", value: Math.min(selectedEmployee.loadCapacity, 140) },
+                      { metric: "Ổn định", value: Math.max(0, 120 - selectedEmployee.loadCapacity) },
+                    ]}>
+                      <PolarGrid />
+                      <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10 }} />
+                      <Radar dataKey="value" stroke="#063986" fill="#063986" fillOpacity={0.25} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-[11px] font-semibold">Dự án đang phụ trách</p>
+                  <div className="space-y-1.5">
+                    {selectedEmployee.projects.length === 0 && <p className="text-[10px] text-muted-foreground">Không có dự án được giao.</p>}
+                    {selectedEmployee.projects.map((p) => (
+                      <div key={`${selectedEmployee.id}-${p.id}`} className="flex items-center justify-between">
+                        <span className="text-[11px]">{p.name}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">{p.role}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <SheetFooter className="border-t border-border">
+                <button
+                  onClick={() => {
+                    const firstProjectId = selectedEmployee.projects[0]?.id ?? "P-001";
+                    setSelectedEmployeeId(null);
+                    openMeetingSheet(firstProjectId);
+                  }}
+                  className="w-full rounded-md bg-[#063986] px-3 py-2 text-xs font-semibold text-white"
+                >
+                  Schedule Performance Review
                 </button>
               </SheetFooter>
             </div>
