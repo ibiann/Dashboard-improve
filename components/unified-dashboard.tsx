@@ -17,6 +17,7 @@ import { MeetingsTab } from "@/components/strategic/meetings-tab";
 import { ArchiveTab } from "@/components/strategic/archive-tab";
 import { PermissionsTab } from "@/components/strategic/permissions-tab";
 import { ProjectDetail } from "@/components/strategic/project-detail";
+import { CEOExecutiveDashboard } from "@/components/strategic/ceo-executive-dashboard";
 import {
   L1_PROJECTS, l1GetPortfolioHealth, l1GetGlobalSPI,
   l1GetResourceEfficiency, l1GetTotalBudget, L1Project,
@@ -111,12 +112,6 @@ function SidebarContent({
   engTab, setEngTab,
 }: SidebarContentProps) {
   if (role === "CEO") {
-    const items: { icon: React.ElementType; label: string; tab: L1Tab }[] = [
-      { icon: LayoutDashboard, label: "Danh mục dự án", tab: "portfolio" },
-      { icon: Users,           label: "Nhân sự",         tab: "people" },
-      { icon: CalendarRange,   label: "Lịch họp",         tab: "meetings" },
-      { icon: Archive,         label: "Lưu trữ",          tab: "archive" },
-    ];
     return (
       <>
         {!collapsed && (
@@ -125,10 +120,13 @@ function SidebarContent({
           </p>
         )}
         <nav className="flex-1 py-1 space-y-0.5 px-2">
-          {items.map(({ icon, label, tab }) => (
-            <SidebarItem key={tab} icon={icon} label={label} active={l1Tab === tab}
-              onClick={() => setL1Tab(tab)} collapsed={collapsed} />
-          ))}
+          <SidebarItem
+            icon={LayoutDashboard}
+            label="Dashboard"
+            active
+            onClick={() => {}}
+            collapsed={collapsed}
+          />
         </nav>
       </>
     );
@@ -409,20 +407,17 @@ function buildBreadcrumbs(
   pmProject: PMProject | null, pmTab: PMProjectTab, engTab: string,
   selectedProject: L1Project | null
 ): string[] {
-  if (role === "Engineer") {
-    const engLabels: Record<string, string> = {
-      dashboard: "Dashboard", tasks: "Công việc",
-      timesheet: "Chấm công", calendar: "Lịch & Họp",
-    };
-    return ["Engineer", engLabels[engTab] ?? engTab];
+  if (role === "CEO") {
+    return ["CEO", "Executive Dashboard"];
   }
-  if (role === "CEO" || role === "CTO") {
+  if (role === "CTO") {
     const base = ["Dashboard", L1_TAB_LABELS[l1Tab]];
     if (selectedProject && l1Tab === "portfolio") {
       return [...base, selectedProject.name];
     }
     return base;
   }
+  if (role === "Engineer") {
   if (!pmProject) {
     return ["PM Home", PM_HOME_LABELS[pmHomeView]];
   }
@@ -496,7 +491,12 @@ export function UnifiedDashboard() {
       return <EngineerContent activeTab={engTab} />;
     }
 
-    if (viewRole === "CEO" || viewRole === "CTO") {
+    if (viewRole === "CEO") {
+      // CEO always sees the single-page executive dashboard (no tabs)
+      return <CEOExecutiveDashboard />;
+    }
+
+    if (viewRole === "CTO") {
       const role = viewRole;
       // Project detail view — overlay portfolio table
       if (l1Tab === "portfolio" && selectedProject) {
@@ -524,9 +524,7 @@ export function UnifiedDashboard() {
         case "meetings":   return <MeetingsTab />;
         case "archive":    return <ArchiveTab projects={L1_PROJECTS} />;
         case "permissions":
-          return role === "CTO" ? <PermissionsTab /> : (
-            <PlaceholderView title="Phân quyền" note="Chỉ CTO mới có quyền truy cập" />
-          );
+          return <PermissionsTab />;
         case "quality": return <PlaceholderView title="Chất lượng" />;
         case "risk":    return <PlaceholderView title="Rủi ro" />;
         default: return null;
@@ -684,14 +682,13 @@ export function UnifiedDashboard() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto px-4 py-5 md:px-6 space-y-5">
-          {/* Page title (L1 or PM home) — hide for Engineer, PM project view, and L1 project detail */}
-          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && !selectedProject && (
+          {/* Page title — hide for Engineer, PM project view, L1 project detail, and CEO (self-renders header) */}
+          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && viewRole !== "CEO" && !selectedProject && (
             <div>
               <h1 className="text-base font-extrabold text-foreground tracking-tight font-sans">
                 {viewRole === "PM" ? PM_HOME_LABELS[pmHomeView] : L1_TAB_LABELS[l1Tab]}
               </h1>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {viewRole === "CEO" && l1Tab === "portfolio" && "22 dự án · CEO Executive Overview"}
                 {viewRole === "CTO" && l1Tab === "portfolio" && "22 dự án · CTO Strategic"}
                 {viewRole === "PM"  && pmHomeView === "projects"      && "Alice Morgan — 3 dự án được giao"}
                 {viewRole === "PM"  && pmHomeView === "workspace"     && "Việc cần làm & lịch họp cá nhân"}
