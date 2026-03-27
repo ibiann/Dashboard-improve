@@ -418,6 +418,12 @@ function buildBreadcrumbs(
     return base;
   }
   if (role === "Engineer") {
+    const engLabels: Record<string, string> = {
+      dashboard: "Dashboard", tasks: "Công việc",
+      timesheet: "Chấm công", calendar: "Lịch & Họp",
+    };
+    return ["Engineer", engLabels[engTab] ?? engTab];
+  }
   if (!pmProject) {
     return ["PM Home", PM_HOME_LABELS[pmHomeView]];
   }
