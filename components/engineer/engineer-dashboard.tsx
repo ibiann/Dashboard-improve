@@ -111,7 +111,7 @@ function TaskRow({
   const progress = Math.round((task.loggedHours / task.plannedHours) * 100);
 
   return (
-    <div className="flex items-center gap-3 py-2 border-b last:border-b-0 hover:bg-slate-50 transition-colors group">
+    <div role="listitem" className="flex items-center gap-3 py-2 border-b last:border-b-0 hover:bg-slate-50 transition-colors group">
       <button
         onClick={() => onToggle(task.id)}
         disabled={task.status === "Waiting for Review" || task.status === "Done"}
@@ -212,14 +212,18 @@ function RecentTimesheet() {
 
 // ─── Engineer Dashboard ──────────────────────────────────────────────────────
 
+const ACTIVE_TASKS_SCROLL_AFTER = 4;
+
 export function EngineerDashboard({
-  onDismissNotif, onTaskClick, runningTaskId, onToggleTimer, timerElapsed,
+  onDismissNotif, onTaskClick, runningTaskId, onToggleTimer, timerElapsed, onViewAllTasks,
 }: {
   onDismissNotif: (id: string) => void;
   onTaskClick: (id: string) => void;
   runningTaskId: string | null;
   onToggleTimer: (id: string) => void;
   timerElapsed: number;
+  /** Mở tab Công việc khi danh sách dài hoặc người dùng muốn xem đầy đủ */
+  onViewAllTasks?: () => void;
 }) {
   const activeTasks = ENG_TASKS.filter((t) => t.status === "In Progress" || t.status === "Waiting for Review");
   const upcomingMeetings = ENG_MEETINGS.slice(0, 2);
@@ -249,14 +253,58 @@ export function EngineerDashboard({
       {/* KPI Cards */}
       <KpiCards />
 
-      {/* Active Tasks */}
-      <section className="bg-white border rounded-lg p-4">
-        <h2 className="text-sm font-bold text-foreground mb-3">Active Tasks</h2>
-        <div>
-          {activeTasks.map((task) => (
-            <TaskRow key={task.id} task={task} runningId={runningTaskId} onToggle={onToggleTimer} onClick={onTaskClick} timerElapsed={timerElapsed} />
-          ))}
+      {/* Active Tasks — cuộn nội bộ khi nhiều dòng; liên kết tới tab Công việc đầy đủ */}
+      <section className="bg-white border rounded-lg p-4 flex flex-col min-h-0">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="text-sm font-bold text-foreground">Active Tasks</h2>
+          {activeTasks.length > 0 && (
+            <span className="text-[10px] font-semibold tabular-nums text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full">
+              {activeTasks.length}
+            </span>
+          )}
         </div>
+        {activeTasks.length === 0 ? (
+          <p className="text-xs text-muted-foreground py-6 text-center">Không có công việc đang xử lý hoặc chờ duyệt.</p>
+        ) : (
+          <>
+            <div
+              className={cn(
+                "min-h-0 -mx-1 px-1",
+                activeTasks.length > ACTIVE_TASKS_SCROLL_AFTER &&
+                  "max-h-[min(45vh,18rem)] overflow-y-auto overflow-x-hidden overscroll-y-contain scroll-smooth pr-1 [scrollbar-gutter:stable]"
+              )}
+              role="list"
+              aria-label="Công việc đang hoạt động"
+            >
+              {activeTasks.map((task) => (
+                <TaskRow
+                  key={task.id}
+                  task={task}
+                  runningId={runningTaskId}
+                  onToggle={onToggleTimer}
+                  onClick={onTaskClick}
+                  timerElapsed={timerElapsed}
+                />
+              ))}
+            </div>
+            {onViewAllTasks && (
+              <div className="mt-3 pt-3 border-t border-border/80 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] text-muted-foreground">
+                  {activeTasks.length > ACTIVE_TASKS_SCROLL_AFTER
+                    ? "Danh sách có thể cuộn; mở Công việc để lọc, sắp xếp và xem toàn bộ."
+                    : "Xem đầy đủ trên tab Công việc (lọc, sắp xếp)."}
+                </p>
+                <button
+                  type="button"
+                  onClick={onViewAllTasks}
+                  className="text-xs font-semibold shrink-0 rounded-md px-2 py-1.5 text-[#063986] hover:bg-[#063986]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#063986] focus-visible:ring-offset-2"
+                >
+                  Tất cả công việc →
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* Split Grid: Meetings + Deadlines */}

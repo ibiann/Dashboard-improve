@@ -5,7 +5,7 @@ import {
   ChevronDown, Bell, Plus, ChevronRight, ChevronLeft,
   Network, LayoutDashboard, Users, CalendarRange, Archive,
   ShieldCheck, AlertTriangle, Lock, Folder, ClipboardList,
-  Layers, LayoutGrid, Clock, Construction, Cpu,
+  Layers, LayoutGrid, Clock, Construction, Cpu, UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -221,10 +221,11 @@ function SidebarContent({
 
   // Engineer
   const engItems: { icon: React.ElementType; label: string; tab: string }[] = [
-    { icon: LayoutDashboard, label: "Dashboard",   tab: "dashboard" },
-    { icon: ClipboardList,   label: "Công việc",   tab: "tasks" },
-    { icon: Clock,           label: "Chấm công",   tab: "timesheet" },
-    { icon: CalendarRange,   label: "Lịch & Họp",  tab: "calendar" },
+    { icon: LayoutDashboard, label: "Dashboard",           tab: "dashboard" },
+    { icon: ClipboardList,   label: "Công việc",           tab: "tasks" },
+    { icon: Clock,           label: "Chấm công",           tab: "timesheet" },
+    { icon: CalendarRange,   label: "Lịch & Họp",          tab: "calendar" },
+    { icon: UserCircle,      label: "Hồ sơ & Cài đặt",     tab: "profile" },
   ];
   return (
     <>
@@ -421,6 +422,7 @@ function buildBreadcrumbs(
     const engLabels: Record<string, string> = {
       dashboard: "Dashboard", tasks: "Công việc",
       timesheet: "Chấm công", calendar: "Lịch & Họp",
+      profile: "Hồ sơ & Cài đặt",
     };
     return ["Engineer", engLabels[engTab] ?? engTab];
   }
@@ -494,7 +496,7 @@ export function UnifiedDashboard() {
   // ── Content renderer ──────────────────────────────────────────────────────
   function renderContent() {
     if (viewRole === "Engineer") {
-      return <EngineerContent activeTab={engTab} />;
+      return <EngineerContent activeTab={engTab} onNavigate={setEngTab} />;
     }
 
     if (viewRole === "CEO") {

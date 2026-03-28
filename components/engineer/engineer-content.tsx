@@ -5,6 +5,7 @@ import { EngineerDashboard } from "@/components/engineer/engineer-dashboard";
 import { EngineerTasks } from "@/components/engineer/engineer-tasks";
 import { EngineerTimesheet } from "@/components/engineer/engineer-timesheet";
 import { EngineerCalendar } from "@/components/engineer/engineer-calendar";
+import { EngineerProfileSettings } from "@/components/engineer/engineer-profile-settings";
 import { EngineerTaskDrawer } from "@/components/engineer/engineer-task-drawer";
 import { LogWorkModal, LogWorkPayload } from "@/components/engineer/log-work-modal";
 import { ENG_TASKS, EngTask } from "@/lib/engineer-mock-data";
@@ -13,7 +14,14 @@ import { ENG_TASKS, EngTask } from "@/lib/engineer-mock-data";
  * EngineerContent — top-level stateful wrapper for all Level 3 engineer views.
  * Accepts activeTab from the unified dashboard sidebar and renders the correct view.
  */
-export function EngineerContent({ activeTab }: { activeTab: string }) {
+export function EngineerContent({
+  activeTab,
+  onNavigate,
+}: {
+  activeTab: string;
+  /** Chuyển tab kỹ sư (vd. từ dashboard → công việc) */
+  onNavigate?: (tab: string) => void;
+}) {
   // Shared state across all engineer tabs
   const [runningTaskId, setRunningTaskId]   = useState<string | null>(null);
   const [timerElapsed, setTimerElapsed]     = useState(0);
@@ -82,6 +90,7 @@ export function EngineerContent({ activeTab }: { activeTab: string }) {
           runningTaskId={runningTaskId}
           onToggleTimer={handleToggleTimer}
           timerElapsed={timerElapsed}
+          onViewAllTasks={() => onNavigate?.("tasks")}
         />
       )}
 
@@ -97,6 +106,8 @@ export function EngineerContent({ activeTab }: { activeTab: string }) {
       {activeTab === "timesheet" && <EngineerTimesheet />}
 
       {activeTab === "calendar" && <EngineerCalendar />}
+
+      {activeTab === "profile" && <EngineerProfileSettings />}
 
       {/* Task Drawer — rendered above all content */}
       {drawerTask && (

@@ -82,8 +82,17 @@ export interface EngNotification {
 export const ENG_PROFILE = {
   name: "James Hart",
   initials: "JH",
-  role: "FPGA Engineer",
-  dept: "FPGA Dept",
+  /** Mã nhân viên — đồng bộ HRIS (chỉ đọc trên portal) */
+  employeeId: "LN-ENG-L3-7842",
+  role: "Kỹ sư FPGA · Level 3",
+  dept: "Bộ phận FPGA",
+  phone: "+84 90 123 4567",
+  workEmail: "james.hart@lancsnetworks.com",
+  bio: "Kỹ sư FPGA Level 3 tại Lancs Networks; tập trung timing closure, tối ưu năng lượng và tích hợp RF.",
+  githubUrl: "https://github.com/jhart-lancs",
+  linkedinUrl: "https://www.linkedin.com/in/james-hart",
+  /** Kỹ năng kỹ thuật — dùng cho heatmap nguồn lực (CTO) */
+  skills: ["FPGA", "Verilog", "C++", "Timing closure", "VHDL", "SystemVerilog"] as string[],
   projects: [
     { id: "PRJ-001", name: "NavComm FPGA Core",       progress: 62, rag: "amber" },
     { id: "PRJ-005", name: "TerraEdge IoT Platform",  progress: 55, rag: "amber" },
