@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, ArrowLeft, AlertTriangle, Clock, CheckCircle2, TrendingUp, Users, DollarSign, Layers, ShieldAlert, CalendarDays, Send, CalendarClock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ChevronRight, ArrowLeft, AlertTriangle, Clock, CheckCircle2, TrendingUp, Users, DollarSign, Layers, ShieldAlert, CalendarDays, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EMPLOYEES, L1_PROJECTS, L1Project, avgKPI } from "@/lib/strategic-mock-data";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -234,7 +234,7 @@ export function CEOExecutiveDashboard() {
   const [pingStatus, setPingStatus] = useState<string>("");
   const [meetingMessage, setMeetingMessage] = useState<string>("");
   const [customMeetingTime, setCustomMeetingTime] = useState<string>("");
-  const [meetings, setMeetings] = useState<MeetingItem[]>(MEETINGS.map((m, idx) => ({ ...m, id: `M-${idx + 1}` })));
+  const meetings = MEETINGS.map((m, idx) => ({ ...m, id: `M-${idx + 1}` }));
   const [quickMode, setQuickMode] = useState<"Sáng" | "Chiều" | "Ngày mai">("Sáng");
   const [staffFilter, setStaffFilter] = useState<StaffFilter>("top10");
   const [staffScrollTop, setStaffScrollTop] = useState(0);
@@ -242,8 +242,10 @@ export function CEOExecutiveDashboard() {
   const [projectScrollTop, setProjectScrollTop] = useState(0);
 
   // #region agent log
-  if (typeof window !== "undefined" && !(window as Record<string, unknown>).__ceoDebugRender043cf0) {
-    (window as Record<string, unknown>).__ceoDebugRender043cf0 = true;
+  if (typeof window !== "undefined") {
+    const debugWindow = window as unknown as { __ceoDebugRender043cf0?: boolean };
+    if (!debugWindow.__ceoDebugRender043cf0) {
+      debugWindow.__ceoDebugRender043cf0 = true;
     sendDebug({
       runId: "pre-fix",
       hypothesisId: "H4",
@@ -255,6 +257,7 @@ export function CEOExecutiveDashboard() {
         projectCount: CEO_PROJECTS.length,
       },
     });
+    }
   }
 
   useEffect(() => {
@@ -376,27 +379,6 @@ export function CEOExecutiveDashboard() {
   const visibleStaffRows = flatStaffRows.slice(staffStart, staffEnd);
   const selectedEmployee = staffRows.find((s) => s.id === selectedEmployeeId) ?? null;
 
-  function postponeMeeting(minutes: number) {
-    setMeetings((prev) => {
-      if (!prev.length) return prev;
-      const first = prev[0];
-      const [h, m] = first.time.split(":").map(Number);
-      const dt = new Date();
-      dt.setHours(h, m + minutes, 0, 0);
-      const hh = String(dt.getHours()).padStart(2, "0");
-      const mm = String(dt.getMinutes()).padStart(2, "0");
-      return [{ ...first, time: `${hh}:${mm}` }, ...prev.slice(1)];
-    });
-  }
-
-  function pushMeetingTomorrow() {
-    setMeetings((prev) => {
-      if (!prev.length) return prev;
-      const first = prev[0];
-      return [{ ...first, title: `${first.title} (dời sang mai)` }, ...prev.slice(1)];
-    });
-  }
-
   function approveDraft(draft: CTODraft) {
     setCtoDrafts((prev) => prev.map((d) => (d.id === draft.id ? { ...d, status: "approved" } : d)));
     openMeetingSheet(draft.projectId);
@@ -405,10 +387,10 @@ export function CEOExecutiveDashboard() {
   }
 
   // Sort: red → amber → green
-  const sortedProjects = useMemo(() => {
+  const sortedProjects = [...CEO_PROJECTS].sort((a, b) => {
     const o: Record<RAG, number> = { red: 0, amber: 1, green: 2 };
-    return [...CEO_PROJECTS].sort((a, b) => o[a.rag] - o[b.rag]);
-  }, []);
+    return o[a.rag] - o[b.rag];
+  });
 
   const PROJECT_ROW_HEIGHT = 52;
   const PROJECT_VIEWPORT_HEIGHT = 430;
@@ -470,36 +452,33 @@ export function CEOExecutiveDashboard() {
               <div key={rag} className="flex items-center gap-1.5">
                 {ragDot(rag)}
                 <span className="text-sm font-black font-mono" style={{ color: ragColor(rag) }}>{count}</span>
-                <span className="text-[10px] text-muted-foreground">{label}</span>
+                <span className="text-xs text-muted-foreground">{label}</span>
               </div>
             ))}
           </div>
 
-          <div className="rounded-lg border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-1.5">
-              <CalendarClock className="w-3.5 h-3.5 text-[#063986]" />
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Quick Postpone</p>
-            </div>
-            <p className="mt-1 text-xs font-semibold text-foreground">
-              {meetings[0]?.title ?? "Chưa có lịch gần nhất"} · <span className="font-mono">{meetings[0]?.time ?? "--:--"}</span>
-            </p>
-            <div className="mt-2 flex items-center gap-1.5">
-              <button onClick={() => postponeMeeting(15)} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">+15m</button>
-              <button onClick={() => postponeMeeting(30)} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">+30m</button>
-              <button onClick={pushMeetingTomorrow} className="rounded-md border border-border px-2 py-1 text-[10px] font-semibold hover:bg-muted">Dời sang mai</button>
-            </div>
-          </div>
-
           <div className="border-t border-border pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Lịch họp hôm nay</p>
-            <div className="space-y-1.5">
-              {meetings.map((m) => (
-                <div key={m.id} className="flex items-center gap-2 text-xs">
-                  <span className="font-mono font-bold text-primary w-10 shrink-0">{m.time}</span>
-                  <span className="flex-1 font-medium text-foreground">{m.title}</span>
-                  <span className="text-muted-foreground text-[10px]">{m.location}</span>
-                </div>
-              ))}
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+              Timeline lịch họp (CEO)
+            </p>
+            <div className="relative pl-2">
+              <div className="absolute left-0 top-1 bottom-1 w-[2px] bg-muted" aria-hidden="true" />
+              <div className="space-y-1.5">
+                {meetings.map((m, idx) => {
+                  const isNext = idx === 0;
+                  return (
+                    <div key={m.id} className={cn("flex items-start gap-2 text-xs pl-2", isNext && "bg-blue-50 rounded-lg px-2 py-1")}>
+                      <span className="relative font-mono font-bold text-primary w-14 shrink-0">
+                        {m.time}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-foreground truncate">{m.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{m.location}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -509,7 +488,7 @@ export function CEOExecutiveDashboard() {
           <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
             <AlertTriangle className="w-4 h-4 text-warning" />
             <h3 className="text-sm font-bold text-foreground">Cần quyết định</h3>
-            <span className="ml-1 text-[10px] font-bold bg-destructive text-white px-1.5 py-0.5 rounded-full">
+            <span className="ml-1 text-xs font-bold bg-destructive text-white px-1.5 py-0.5 rounded-full">
               {pendingDecisionCount}
             </span>
           </div>
@@ -521,25 +500,33 @@ export function CEOExecutiveDashboard() {
                 low:    { bg: "#eff6ff", border: "#93c5fd", badge: "#1e40af", badgeBg: "#dbeafe" },
               }[d.urgency];
               return (
-                <button
+                <div
                   key={d.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setDrillProjectId(d.projectId)}
-                  className="w-full text-left px-5 py-3.5 hover:brightness-95 transition-all group"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setDrillProjectId(d.projectId);
+                    }
+                  }}
+                  className="w-full text-left px-5 py-3.5 hover:brightness-95 transition-all group cursor-pointer"
                   style={{ backgroundColor: styles.bg, borderLeft: `3px solid ${styles.border}` }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span
-                          className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+                          className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0"
                           style={{ backgroundColor: styles.badgeBg, color: styles.badge }}
                         >
                           {d.badge}
                         </span>
                         <span className="text-xs font-semibold text-foreground truncate">{d.title}</span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{d.detail}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">Từ: <span className="font-semibold">{d.from}</span></p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{d.detail}</p>
+                      <p className="text-xs text-muted-foreground mt-1">Từ: <span className="font-semibold">{d.from}</span></p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform mt-1" />
@@ -548,14 +535,14 @@ export function CEOExecutiveDashboard() {
                           e.stopPropagation();
                           openMeetingSheet(d.projectId);
                         }}
-                        className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                        className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90"
                       >
                         <CalendarDays className="w-3 h-3" />
                         Lên lịch họp
                       </button>
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
             {highRiskProjects
@@ -569,20 +556,20 @@ export function CEOExecutiveDashboard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-red-100 text-red-700">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0 bg-red-100 text-red-700">
                           Tự động
                         </span>
                         <span className="text-xs font-semibold text-foreground truncate">
                           {p.name} có SPI thấp ({p.spi.toFixed(2)})
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed">
                         Cần họp đánh giá tiến độ với PM để xử lý rủi ro lịch trình.
                       </p>
                     </div>
                     <button
                       onClick={() => openMeetingSheet(p.id)}
-                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90"
                     >
                       <CalendarDays className="w-3 h-3" />
                       Lên lịch họp
@@ -601,20 +588,20 @@ export function CEOExecutiveDashboard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-blue-100 text-blue-700">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full shrink-0 bg-blue-100 text-blue-700">
                           CTO đề xuất
                         </span>
                         <span className="text-xs font-semibold text-foreground truncate">
                           {d.projectName} · <span className="font-mono">SPI {d.spi.toFixed(2)}</span>
                         </span>
                       </div>
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <p className="text-sm text-muted-foreground leading-relaxed">
                         Khung giờ đề xuất: <span className="font-mono">{d.proposedSlot}</span>
                       </p>
                     </div>
                     <button
                       onClick={() => approveDraft(d)}
-                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2 py-1 text-[10px] font-semibold text-white hover:opacity-90"
+                      className="inline-flex items-center gap-1 rounded-md bg-[#063986] px-2.5 py-1 text-xs font-semibold text-white hover:opacity-90"
                     >
                       Duyệt 1 chạm
                     </button>
@@ -671,13 +658,13 @@ export function CEOExecutiveDashboard() {
         ].map(({ title, icon, iconBg, iconColor, value, sub }) => (
           <div key={title} className="bg-card rounded-xl border border-border px-4 py-3.5 flex flex-col gap-2">
             <div className="flex items-start justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{title}</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{title}</p>
               <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: iconBg, color: iconColor }}>
                 {icon}
               </div>
             </div>
             <p className="text-xl font-black font-mono text-foreground leading-none">{value}</p>
-            <p className="text-[10px] text-muted-foreground">{sub}</p>
+            <p className="text-xs text-muted-foreground">{sub}</p>
           </div>
         ))}
       </div>
@@ -686,7 +673,7 @@ export function CEOExecutiveDashboard() {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-border">
           <h3 className="text-sm font-bold text-foreground">Tình trạng dự án</h3>
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
             {[
               { rag: "green" as RAG, label: "Đúng tiến độ" },
               { rag: "amber" as RAG, label: "Rủi ro" },
@@ -699,7 +686,7 @@ export function CEOExecutiveDashboard() {
             ))}
           </div>
         </div>
-        <div className="grid grid-cols-12 px-4 py-2 text-[10px] text-muted-foreground border-b border-border bg-muted/20">
+        <div className="grid grid-cols-12 px-4 py-2 text-xs text-muted-foreground border-b border-border bg-muted/20">
           <div className="col-span-4">Dự án</div>
           <div className="col-span-4 text-center">Actual / Planned</div>
           <div className="col-span-2 text-center">Variance (Δ)</div>
@@ -720,10 +707,18 @@ export function CEOExecutiveDashboard() {
               const negGapLeft = delta < 0 ? p.progress : 0;
 
               return (
-                <button
+                <div
                   key={p.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setDrillProjectId(p.id)}
-                  className="absolute left-0 right-0 grid grid-cols-12 items-center px-4 border-b border-border hover:bg-muted/25 text-left group"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setDrillProjectId(p.id);
+                    }
+                  }}
+                  className="absolute left-0 right-0 grid grid-cols-12 items-center px-4 border-b border-border hover:bg-muted/25 text-left group cursor-pointer"
                   style={{ top, height: PROJECT_ROW_HEIGHT }}
                 >
                   <div className="col-span-4 min-w-0 pr-2">
@@ -731,7 +726,7 @@ export function CEOExecutiveDashboard() {
                       <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: rc }} />
                       <p className="text-xs font-semibold text-foreground truncate">{p.name}</p>
                     </div>
-                    <p className="text-[10px] text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {p.pm} · {p.cat} · {p.overdue} task trễ
                     </p>
                   </div>
@@ -747,7 +742,7 @@ export function CEOExecutiveDashboard() {
                       <div className="absolute top-0 bottom-0 rounded-full" style={{ width: `${actualPos}%`, backgroundColor: rc }} />
                       <div className="absolute top-[-1px] bottom-[-1px] w-[1px] bg-foreground/50" style={{ left: `${plannedPos}%` }} />
                     </div>
-                    <p className="mt-1 text-[9px] text-muted-foreground font-mono">{p.progress}% / {p.planned}%</p>
+                    <p className="mt-1 text-xs text-muted-foreground font-mono">{p.progress}% / {p.planned}%</p>
                   </div>
 
                   <div className={cn("col-span-2 text-center font-mono text-xs font-semibold", deltaColor)}>
@@ -772,7 +767,7 @@ export function CEOExecutiveDashboard() {
                     </button>
                     <ChevronRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -784,18 +779,18 @@ export function CEOExecutiveDashboard() {
 
         {/* Budget overview */}
         <div className="bg-card rounded-xl border border-border px-5 py-4 space-y-3">
-          <h3 className="text-sm font-bold text-foreground">Ngân sách tổng hợp</h3>
+          <h3 className="text-base font-bold text-foreground">Ngân sách tổng hợp</h3>
           <div className="flex items-center gap-4 text-xs flex-wrap">
             <div>
-              <p className="text-[10px] text-muted-foreground">Kế hoạch</p>
+              <p className="text-xs text-muted-foreground">Kế hoạch</p>
               <p className="font-black font-mono text-foreground">{(totalBudget / 1000).toFixed(0)}B</p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Đã chi</p>
+              <p className="text-xs text-muted-foreground">Đã chi</p>
               <p className="font-black font-mono text-primary">{(spentBudget / 1000).toFixed(0)}B</p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Còn lại</p>
+              <p className="text-xs text-muted-foreground">Còn lại</p>
               <p className="font-black font-mono text-green-600">{((totalBudget - spentBudget) / 1000).toFixed(0)}B</p>
             </div>
           </div>
@@ -805,11 +800,11 @@ export function CEOExecutiveDashboard() {
               style={{ width: `${budgetPct}%`, backgroundColor: budgetPct > 85 ? "#ef4444" : "#063986" }}
             />
           </div>
-          <p className="text-[10px] text-muted-foreground font-mono">{budgetPct}% ngân sách đã sử dụng</p>
+          <p className="text-xs text-muted-foreground font-mono">{budgetPct}% ngân sách đã sử dụng</p>
 
           {/* Top 5 projects */}
           <div className="space-y-2 pt-1">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Top 5 dự án</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Top 5 dự án</p>
             {[...CEO_PROJECTS]
               .sort((a, b) => b.budgetSpent - a.budgetSpent)
               .slice(0, 5)
@@ -817,14 +812,14 @@ export function CEOExecutiveDashboard() {
                 const pct = Math.round((p.budgetSpent / p.budgetTotal) * 100);
                 return (
                   <div key={p.id} className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground w-20 truncate shrink-0">{p.name.split(" ").slice(0, 1).join(" ")}</span>
+                    <span className="text-xs text-muted-foreground w-20 truncate shrink-0">{p.name.split(" ").slice(0, 1).join(" ")}</span>
                     <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full"
                         style={{ width: `${pct}%`, backgroundColor: pct > 85 ? "#ef4444" : "#063986" }}
                       />
                     </div>
-                    <span className="text-[10px] font-mono text-muted-foreground w-20 text-right shrink-0">
+                    <span className="text-xs font-mono text-muted-foreground w-20 text-right shrink-0">
                       {p.budgetSpent}M/{p.budgetTotal}M
                     </span>
                   </div>
@@ -835,7 +830,7 @@ export function CEOExecutiveDashboard() {
 
         {/* Recent PM updates */}
         <div className="bg-card rounded-xl border border-border px-5 py-4 space-y-3">
-          <h3 className="text-sm font-bold text-foreground">Cập nhật từ PM</h3>
+          <h3 className="text-base font-bold text-foreground">Cập nhật từ PM</h3>
           <div className="space-y-3">
             {RECENT_UPDATES.map((u, i) => (
               <div key={i} className="flex gap-3 text-xs">
@@ -845,10 +840,10 @@ export function CEOExecutiveDashboard() {
                 </div>
                 <div className="pb-2 flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-muted-foreground">{u.when}</span>
+                    <span className="text-xs text-muted-foreground">{u.when}</span>
                     <span className="font-semibold text-foreground">{u.from}</span>
                   </div>
-                  <p className="text-muted-foreground mt-0.5 leading-relaxed text-[11px]">{u.msg}</p>
+                  <p className="text-muted-foreground mt-0.5 leading-relaxed text-sm">{u.msg}</p>
                 </div>
               </div>
             ))}

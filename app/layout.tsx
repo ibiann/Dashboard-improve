@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { LangProvider } from '@/lib/i18n'
 import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: 'Lancsnetworks – Strategic Executive Dashboard',
@@ -37,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className="font-sans antialiased">
+      <body className={`${inter.className} font-sans antialiased`}>
         <LangProvider>
           {children}
         </LangProvider>
