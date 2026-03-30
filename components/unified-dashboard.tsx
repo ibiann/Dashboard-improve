@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  ChevronDown, Bell, Plus, ChevronRight, ChevronLeft,
-  Network, LayoutDashboard, Users, CalendarRange, Archive,
-  ShieldCheck, AlertTriangle, Lock, Folder, ClipboardList,
-  Layers, LayoutGrid, Clock, Construction, Cpu, UserCircle,
+  ChevronDown, Bell, Plus, ChevronRight,
+  Construction,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +21,12 @@ import {
   L1_PROJECTS, l1GetPortfolioHealth, l1GetGlobalSPI,
   l1GetResourceEfficiency, l1GetTotalBudget, L1Project,
 } from "@/lib/strategic-mock-data";
+import { ViewToggle, WorkspaceViewMode } from "@/components/strategic/view-toggle";
+import { WorkflowCanvas } from "@/components/strategic/workflow-canvas";
+import { WorkflowTabPlaceholder } from "@/components/strategic/workflow-tab-placeholder";
+import { CrmHeaderNav, CrmHeaderBrand } from "@/components/layout/crm-header-nav";
+import { PmWorkflowCanvas } from "@/components/pm/pm-workflow-canvas";
+import { PmProjectWorkflowCanvas } from "@/components/pm/pm-project-workflow-canvas";
 import { Activity, Layers as LayersIcon, Gauge, Users as UsersIcon, DollarSign, ShieldAlert } from "lucide-react";
 
 // ── L3 content imports ───────────────────────────────────────────────────────
@@ -34,10 +39,7 @@ import { PhasePlanTab, ResourceTab } from "@/components/pm/pm-project-detail";
 import { KanbanTab } from "@/components/pm/pm-kanban";
 import { TimesheetApprovalTab } from "@/components/pm/pm-timesheets";
 import { NotificationsTab } from "@/components/pm/pm-notifications";
-import {
-  PM_PROJECTS, PMProject, getProjectProgress,
-  getRAGColor, getRAGLabel, getSPIBadge, getAllTasks,
-} from "@/lib/pm-mock-data";
+import { PM_PROJECTS, PMProject } from "@/lib/pm-mock-data";
 
 // ────────────────────────────────────────────────────────────────────────────
 // Types
@@ -55,281 +57,17 @@ const ROLE_OPTIONS: { role: ViewRole; title: string; desc: string }[] = [
   { role: "Engineer", title: "Engineer", desc: "Kỹ sư — My Tasks & Timesheets" },
 ];
 
-// Placeholder
-
-function SidebarItem({
-  icon: Icon, label, active, onClick, badge, collapsed,
-}: {
-  icon: React.ElementType; label: string; active: boolean;
-  onClick: () => void; badge?: number; collapsed: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={collapsed ? label : undefined}
-      aria-current={active ? "page" : undefined}
-      className={cn(
-        "flex items-center gap-2.5 w-full rounded-md px-2 py-2 text-sm font-medium transition-colors text-left relative",
-        active
-          ? "text-white font-semibold"
-          : "text-white/60 hover:text-white hover:bg-white/10"
-      )}
-      style={active ? { backgroundColor: "#E36C25" } : undefined}
-    >
-      <Icon className="w-4 h-4 shrink-0" />
-      {!collapsed && <span className="flex-1 text-xs truncate">{label}</span>}
-      {!collapsed && badge && badge > 0 ? (
-        <span className="text-[9px] font-bold bg-white/20 text-white px-1.5 py-0.5 rounded-full font-mono shrink-0">
-          {badge}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Sidebar content per role
-// ────────────────────────────────────────────────────────────────────────────
-
-interface SidebarContentProps {
-  role: ViewRole;
-  collapsed: boolean;
-  l1Tab: L1Tab;
-  setL1Tab: (t: L1Tab) => void;
-  pmHomeView: PMHomeView;
-  setPmHomeView: (v: PMHomeView) => void;
-  pmProject: PMProject | null;
-  pmTab: PMProjectTab;
-  setPmTab: (t: PMProjectTab) => void;
-  onPmBack: () => void;
-  engTab: string;
-  setEngTab: (t: string) => void;
-}
-
-function SidebarContent({
-  role, collapsed, l1Tab, setL1Tab,
-  pmHomeView, setPmHomeView, pmProject, pmTab, setPmTab, onPmBack,
-  engTab, setEngTab,
-}: SidebarContentProps) {
-  if (role === "CEO") {
-    return (
-      <>
-        {!collapsed && (
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-            Tổng Giám Đốc
-          </p>
-        )}
-        <nav className="flex-1 py-1 space-y-0.5 px-2">
-          <SidebarItem
-            icon={LayoutDashboard}
-            label="Dashboard"
-            active
-            onClick={() => {}}
-            collapsed={collapsed}
-          />
-        </nav>
-      </>
-    );
-  }
-
-  if (role === "CTO") {
-    const items: { icon: React.ElementType; label: string; tab: L1Tab }[] = [
-      { icon: LayoutDashboard, label: "Danh mục dự án", tab: "portfolio" },
-      { icon: Users,           label: "Nhân sự",         tab: "people" },
-      { icon: CalendarRange,   label: "Lịch họp",         tab: "meetings" },
-      { icon: ShieldCheck,     label: "Chất lượng",       tab: "quality" },
-      { icon: AlertTriangle,   label: "Rủi ro",           tab: "risk" },
-      { icon: Archive,         label: "Lưu trữ",          tab: "archive" },
-      { icon: Lock,            label: "Phân quyền",       tab: "permissions" },
-    ];
-    return (
-      <>
-        {!collapsed && (
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-            CTO · Strategic
-          </p>
-        )}
-        <nav className="flex-1 py-1 space-y-0.5 px-2">
-          {items.map(({ icon, label, tab }) => (
-            <SidebarItem key={tab} icon={icon} label={label} active={l1Tab === tab}
-              onClick={() => setL1Tab(tab)} collapsed={collapsed} />
-          ))}
-        </nav>
-      </>
-    );
-  }
-
-  // PM role
-  if (pmProject) {
-    const allTasks = getAllTasks(pmProject);
-    const reviewBadge = allTasks.filter((t) => t.status === "Waiting for Review").length;
-    const projectItems: { icon: React.ElementType; label: string; tab: PMProjectTab; badge?: number }[] = [
-      { icon: Layers,      label: "Phase Plan",   tab: "phases" },
-      { icon: LayoutGrid,  label: "Task Kanban",  tab: "kanban",     badge: reviewBadge },
-      { icon: Users,       label: "Resource",     tab: "resource" },
-      { icon: Clock,       label: "Timesheets",   tab: "timesheets", badge: pmProject.pendingTimesheetCount },
-      { icon: Bell,        label: "Nhắc việc",    tab: "reminders" },
-    ];
-    return (
-      <>
-        {!collapsed && (
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-            Level 2 — PM
-          </p>
-        )}
-        <nav className="flex-1 py-1 space-y-0.5 px-2">
-          <button
-            onClick={onPmBack}
-            className="flex items-center gap-2.5 w-full px-2 py-2 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4 shrink-0" />
-            {!collapsed && <span className="text-xs font-semibold truncate">Quay lại</span>}
-          </button>
-          <div className="h-px bg-white/10 my-1.5" />
-          {projectItems.map(({ icon, label, tab, badge }) => (
-            <SidebarItem key={tab} icon={icon} label={label} active={pmTab === tab}
-              onClick={() => setPmTab(tab)} badge={badge} collapsed={collapsed} />
-          ))}
-        </nav>
-      </>
-    );
-  }
-
-  // PM Home
-  const homeItems: { icon: React.ElementType; label: string; view: PMHomeView }[] = [
-    { icon: Folder,       label: "Dự án của tôi", view: "projects" },
-    { icon: ClipboardList, label: "Workspace",     view: "workspace" },
-    { icon: Bell,         label: "Nhắc việc",      view: "notifications" },
-  ];
-  if (role === "PM") {
-    return (
-      <>
-        {!collapsed && (
-          <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-            Level 2 — PM
-          </p>
-        )}
-        <nav className="flex-1 py-1 space-y-0.5 px-2">
-          {homeItems.map(({ icon, label, view }) => (
-            <SidebarItem key={view} icon={icon} label={label} active={pmHomeView === view}
-              onClick={() => setPmHomeView(view)} collapsed={collapsed} />
-          ))}
-        </nav>
-      </>
-    );
-  }
-
-  // Engineer
-  const engItems: { icon: React.ElementType; label: string; tab: string }[] = [
-    { icon: LayoutDashboard, label: "Dashboard",           tab: "dashboard" },
-    { icon: ClipboardList,   label: "Công việc",           tab: "tasks" },
-    { icon: Clock,           label: "Chấm công",           tab: "timesheet" },
-    { icon: CalendarRange,   label: "Lịch & Họp",          tab: "calendar" },
-    { icon: UserCircle,      label: "Hồ sơ & Cài đặt",     tab: "profile" },
-  ];
-  return (
-    <>
-      {!collapsed && (
-        <p className="px-4 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-white/40">
-          Level 3 — Engineer
-        </p>
-      )}
-      <nav className="flex-1 py-1 space-y-0.5 px-2">
-        {engItems.map(({ icon, label, tab }) => (
-          <SidebarItem key={tab} icon={icon} label={label} active={engTab === tab}
-            onClick={() => setEngTab(tab)} collapsed={collapsed} />
-        ))}
-      </nav>
-    </>
-  );
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-// Project Header Strip (L2 only, inside content area)
-// ────────────────────────────────────────────────────────────────────────────
-
-function ProjectHeaderStrip({
-  project, activeTab, onTabChange,
-}: {
-  project: PMProject; activeTab: PMProjectTab; onTabChange: (t: PMProjectTab) => void;
-}) {
-  const progress = getProjectProgress(project);
-  const allTasks = getAllTasks(project);
-  const reviewCount = allTasks.filter((t) => t.status === "Waiting for Review").length;
-  const ragColor = getRAGColor(project.ragStatus);
-
-  const tabs: { key: PMProjectTab; label: string; badge?: number }[] = [
-    { key: "phases",     label: "Phase Plan" },
-    { key: "kanban",     label: "Task Kanban", badge: reviewCount },
-    { key: "resource",   label: "Resource" },
-    { key: "timesheets", label: "Timesheets",  badge: project.pendingTimesheetCount },
-    { key: "reminders",  label: "Nhắc việc" },
-  ];
-
-  return (
-    <div className="bg-white border-b border-border shrink-0">
-      <div className="px-4 py-2 flex items-center gap-4 flex-wrap">
-        <span className="text-[10px] font-mono font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded">
-          {project.id}
-        </span>
-        <span className="text-sm font-bold text-foreground">{project.name}</span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full text-white font-semibold"
-          style={{ backgroundColor: "#4CABEB" }}>{project.category}</span>
-        <div className="flex items-center gap-1.5">
-          <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${progress}%`, backgroundColor: ragColor }} />
-          </div>
-          <span className="text-[10px] font-mono font-bold" style={{ color: ragColor }}>{progress}%</span>
-        </div>
-        <span className="text-[10px] text-muted-foreground">
-          SPI <span className="font-semibold" style={{ color: getSPIBadge(project.spi).color }}>
-            {project.spi.toFixed(2)}
-          </span>
-        </span>
-        <span className="text-[10px] text-muted-foreground font-mono">
-          {project.totalLoggedHours}h/{project.totalPlannedHours}h
-        </span>
-        <div className="ml-auto">
-          <span className="text-[10px] font-bold text-white px-2 py-1 rounded-full"
-            style={{ backgroundColor: ragColor }}>{getRAGLabel(project.ragStatus)}</span>
-        </div>
-      </div>
-      <div className="flex overflow-x-auto border-t border-border/50">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => onTabChange(tab.key)}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-semibold whitespace-nowrap border-b-2 transition-colors",
-              activeTab === tab.key
-                ? "border-primary text-primary bg-muted/30"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/20"
-            )}
-          >
-            {tab.label}
-            {tab.badge && tab.badge > 0 ? (
-              <span className="text-[9px] font-bold text-white px-1.5 py-0.5 rounded-full bg-warning font-mono">
-                {tab.badge}
-              </span>
-            ) : null}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 // L1 KPI section
 // ────────────────────────────────────────────────────────────────────────────
 
-function L1KPIs({ role }: { role: "CEO" | "CTO" }) {
-  const activeProjects = L1_PROJECTS.filter((p) => !p.closed);
-  const closedProjects = L1_PROJECTS.filter((p) => p.closed);
-  const portfolioHealth = l1GetPortfolioHealth(L1_PROJECTS);
-  const spi = l1GetGlobalSPI(L1_PROJECTS);
-  const resourceEff = l1GetResourceEfficiency(L1_PROJECTS);
-  const budget = l1GetTotalBudget(L1_PROJECTS);
+function L1KPIs({ role, projects }: { role: "CEO" | "CTO"; projects: L1Project[] }) {
+  const activeProjects = projects.filter((p) => !p.closed);
+  const closedProjects = projects.filter((p) => p.closed);
+  const portfolioHealth = l1GetPortfolioHealth(projects);
+  const spi = l1GetGlobalSPI(projects);
+  const resourceEff = l1GetResourceEfficiency(projects);
+  const budget = l1GetTotalBudget(projects);
   const greenCount = activeProjects.filter((p) => p.ragStatus === "green").length;
   const amberCount = activeProjects.filter((p) => p.ragStatus === "amber").length;
   const redCount   = activeProjects.filter((p) => p.ragStatus === "red").length;
@@ -409,6 +147,9 @@ function buildBreadcrumbs(
   selectedProject: L1Project | null
 ): string[] {
   if (role === "CEO") {
+    if (selectedProject) {
+      return ["CEO", "Executive Dashboard", selectedProject.name];
+    }
     return ["CEO", "Executive Dashboard"];
   }
   if (role === "CTO") {
@@ -437,14 +178,22 @@ function buildBreadcrumbs(
 // ────────────────────────────────────────────────────────────────────────────
 
 export function UnifiedDashboard() {
-  const [collapsed, setCollapsed]       = useState(false);
   const [viewRole, setViewRole]         = useState<ViewRole>("CTO");
   const [showRoleDrop, setShowRoleDrop] = useState(false);
   const roleDropRef                     = useRef<HTMLDivElement>(null);
 
-  // L1 state
+  /** List vs Workflow / Tree — all roles */
+  const [workspaceViewMode, setWorkspaceViewMode] = useState<WorkspaceViewMode>("list");
+
+  // L1 state — portfolio copy stays in sync across List / Workflow Canvas
   const [l1Tab, setL1Tab] = useState<L1Tab>("portfolio");
   const [selectedProject, setSelectedProject] = useState<L1Project | null>(null);
+  const [portfolioProjects, setPortfolioProjects] = useState<L1Project[]>(() => [...L1_PROJECTS]);
+
+  const patchPortfolioProject = useCallback((id: string, patch: Partial<L1Project>) => {
+    setPortfolioProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    setSelectedProject((sp) => (sp?.id === id ? { ...sp, ...patch } : sp));
+  }, []);
 
   function handleSetL1Tab(tab: L1Tab) {
     setL1Tab(tab);
@@ -478,7 +227,11 @@ export function UnifiedDashboard() {
     setSelectedProject(null);
     if (role === "PM") { setPmProject(null); setPmHomeView("projects"); }
     else if (role === "Engineer") { setEngTab("dashboard"); }
-    else { setL1Tab("portfolio"); }
+    else {
+      setL1Tab("portfolio");
+      setPortfolioProjects([...L1_PROJECTS]);
+    }
+    setWorkspaceViewMode("list");
   }
 
   function handleSelectProject(projectId: string, tab?: string) {
@@ -493,20 +246,44 @@ export function UnifiedDashboard() {
 
   const breadcrumbs = buildBreadcrumbs(viewRole, l1Tab, pmHomeView, pmProject, pmTab, engTab, selectedProject);
 
-  // ── Content renderer ──────────────────────────────────────────────────────
+  // ── Content renderer — List vs Workflow applies to every role ────────────
   function renderContent() {
+    const wf = workspaceViewMode === "workflow";
+
     if (viewRole === "Engineer") {
-      return <EngineerContent activeTab={engTab} onNavigate={setEngTab} />;
+      return (
+        <EngineerContent
+          activeTab={engTab}
+          onNavigate={setEngTab}
+          workspaceViewMode={workspaceViewMode}
+        />
+      );
     }
 
     if (viewRole === "CEO") {
-      // CEO always sees the single-page executive dashboard (no tabs)
+      if (selectedProject) {
+        return (
+          <ProjectDetail
+            project={selectedProject}
+            role="CEO"
+            onBack={() => setSelectedProject(null)}
+          />
+        );
+      }
+      if (wf) {
+        return (
+          <WorkflowCanvas
+            projects={portfolioProjects}
+            onSelectProject={(p) => setSelectedProject(p)}
+            onUpdateProject={patchPortfolioProject}
+          />
+        );
+      }
       return <CEOExecutiveDashboard />;
     }
 
     if (viewRole === "CTO") {
       const role = viewRole;
-      // Project detail view — overlay portfolio table
       if (l1Tab === "portfolio" && selectedProject) {
         return (
           <ProjectDetail
@@ -516,197 +293,262 @@ export function UnifiedDashboard() {
           />
         );
       }
+
+      if (wf) {
+        if (l1Tab === "portfolio") {
+          return (
+            <div className="space-y-6">
+              <L1KPIs role={role} projects={portfolioProjects} />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key="cto-wf-portfolio"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <WorkflowCanvas
+                    projects={portfolioProjects}
+                    onSelectProject={(p) => setSelectedProject(p)}
+                    onUpdateProject={patchPortfolioProject}
+                  />
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          );
+        }
+        return (
+          <WorkflowTabPlaceholder
+            title={`Workflow — ${L1_TAB_LABELS[l1Tab]}`}
+            hint="Chuyển sang Danh sách để dùng đầy đủ tab này, hoặc mở Danh mục dự án để xem canvas portfolio."
+          />
+        );
+      }
+
       switch (l1Tab) {
         case "portfolio":
           return (
             <div className="space-y-6">
-              <L1KPIs role={role} />
-              <PortfolioTab
-                projects={L1_PROJECTS}
-                viewMode="cto"
-                onSelectProject={(p) => setSelectedProject(p)}
-              />
+              <L1KPIs role={role} projects={portfolioProjects} />
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key="cto-list-portfolio"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <PortfolioTab
+                    projects={portfolioProjects}
+                    viewMode="cto"
+                    onSelectProject={(p) => setSelectedProject(p)}
+                  />
+                </motion.div>
+              </AnimatePresence>
             </div>
           );
-        case "people":     return <PeopleTab />;
-        case "meetings":   return <MeetingsTab />;
-        case "archive":    return <ArchiveTab projects={L1_PROJECTS} />;
+        case "people":
+          return <PeopleTab />;
+        case "meetings":
+          return <MeetingsTab />;
+        case "archive":
+          return <ArchiveTab projects={portfolioProjects} />;
         case "permissions":
           return <PermissionsTab />;
-        case "quality": return <PlaceholderView title="Chất lượng" />;
-        case "risk":    return <PlaceholderView title="Rủi ro" />;
-        default: return null;
+        case "quality":
+          return <PlaceholderView title="Chất lượng" />;
+        case "risk":
+          return <PlaceholderView title="Rủi ro" />;
+        default:
+          return null;
       }
     }
 
     // PM
     if (!pmProject) {
-      if (pmHomeView === "workspace")     return <PMWorkspace />;
+      if (wf) {
+        if (pmHomeView === "projects") {
+          return (
+            <PmWorkflowCanvas projects={PM_PROJECTS} onSelectProject={handleSelectProject} />
+          );
+        }
+        return (
+          <WorkflowTabPlaceholder
+            title={`Workflow — ${PM_HOME_LABELS[pmHomeView]}`}
+            hint="Canvas workflow cho mục này đang được mở rộng. Dùng Danh sách để làm việc đầy đủ."
+          />
+        );
+      }
+      if (pmHomeView === "workspace") return <PMWorkspace />;
       if (pmHomeView === "notifications") return <NotificationsTab />;
       return <PMHome onSelectProject={handleSelectProject} />;
     }
+
+    if (wf) {
+      return (
+        <PmProjectWorkflowCanvas
+          project={pmProject}
+          onTaskClick={() => {
+            setWorkspaceViewMode("list");
+            setPmTab("kanban");
+          }}
+        />
+      );
+    }
+
     switch (pmTab) {
-      case "phases":     return <PhasePlanTab project={pmProject} onTaskClick={() => setPmTab("kanban")} />;
-      case "kanban":     return <KanbanTab project={pmProject} onTaskUpdate={() => {}} />;
-      case "resource":   return <ResourceTab project={pmProject} />;
-      case "timesheets": return <TimesheetApprovalTab project={pmProject} />;
-      case "reminders":  return <NotificationsTab />;
-      default: return null;
+      case "phases":
+        return <PhasePlanTab project={pmProject} onTaskClick={() => setPmTab("kanban")} />;
+      case "kanban":
+        return <KanbanTab project={pmProject} onTaskUpdate={() => {}} />;
+      case "resource":
+        return <ResourceTab project={pmProject} />;
+      case "timesheets":
+        return <TimesheetApprovalTab project={pmProject} />;
+      case "reminders":
+        return <NotificationsTab />;
+      default:
+        return null;
     }
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* ── Sidebar ────────────────────────────────────────────────────── */}
-      <aside
-        className="flex flex-col shrink-0 transition-all duration-200 overflow-hidden"
-        style={{ width: collapsed ? 56 : 220, backgroundColor: "#063986", minHeight: "100vh" }}
-      >
-        {/* Logo row */}
-        <div className="flex items-center gap-2.5 px-3 py-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center justify-center w-8 h-8 rounded-md bg-white/10 shrink-0">
-            <Network className="w-4 h-4 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-extrabold text-sm leading-tight truncate">Lancsnetworks</p>
-              <p className="text-white/40 text-[9px] font-semibold tracking-widest uppercase mt-0.5">
-                {viewRole === "CEO" ? "Tổng Giám Đốc" : viewRole === "CTO" ? "CTO · Strategic" : viewRole === "Engineer" ? "Level 3 — Engineer" : "Level 2 — PM"}
-              </p>
-            </div>
-          )}
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="text-white/50 hover:text-white p-1 rounded-lg transition-colors shrink-0"
-            aria-label={collapsed ? "Mở rộng sidebar" : "Thu gọn sidebar"}
-          >
-            {collapsed
-              ? <ChevronRight className="w-4 h-4" />
-              : <ChevronLeft className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Nav items */}
-        <div className="flex-1 flex flex-col overflow-y-auto">
-          <SidebarContent
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-50">
+      {/* LinkSafe CRM: primary navigation in header (no left sidebar) */}
+      <div className="z-40 shrink-0 bg-[#063986] text-white shadow-sm">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 px-3 py-2 sm:px-4">
+          <CrmHeaderBrand />
+          <CrmHeaderNav
             role={viewRole}
-            collapsed={collapsed}
             l1Tab={l1Tab}
             setL1Tab={handleSetL1Tab}
             pmHomeView={pmHomeView}
-            setPmHomeView={setPmHomeView}
+            setPmHomeView={(v) => {
+              setPmHomeView(v);
+              setWorkspaceViewMode("list");
+            }}
             pmProject={pmProject}
             pmTab={pmTab}
-            setPmTab={setPmTab}
+            setPmTab={(t) => {
+              setPmTab(t);
+              setWorkspaceViewMode("list");
+            }}
             onPmBack={handlePmBack}
             engTab={engTab}
-            setEngTab={setEngTab}
+            setEngTab={(t) => {
+              setEngTab(t);
+              setWorkspaceViewMode("list");
+            }}
           />
-        </div>
-      </aside>
-
-      {/* ── Main column ────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-        {/* ── ONE Top Bar ──────────────────────────────────────────────── */}
-        <header className="h-12 bg-white border-b border-border flex items-center px-4 gap-3 shrink-0 z-30">
-          {/* Role dropdown */}
-          <div className="relative shrink-0" ref={roleDropRef}>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <ViewToggle
+              variant="dark"
+              value={workspaceViewMode}
+              onChange={setWorkspaceViewMode}
+              className="shrink-0"
+            />
+            <div className="relative shrink-0" ref={roleDropRef}>
+              <button
+                type="button"
+                onClick={() => setShowRoleDrop(!showRoleDrop)}
+                className="flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/25"
+              >
+                Vai trò: <span className="font-bold">{viewRole}</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              {showRoleDrop && (
+                <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-border bg-white shadow-lg">
+                  {ROLE_OPTIONS.map(({ role, title, desc }) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => handleRoleChange(role)}
+                      className={cn(
+                        "flex w-full items-start justify-between gap-2 border-b border-border/60 px-3 py-2.5 text-left transition-colors last:border-b-0",
+                        viewRole === role ? "bg-primary/5" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-foreground">{title}</p>
+                        <p className="text-[10px] text-muted-foreground">{desc}</p>
+                      </div>
+                      {viewRole === role && (
+                        <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-green-500" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <button
-              onClick={() => setShowRoleDrop(!showRoleDrop)}
-              className="flex items-center gap-1.5 bg-primary/10 text-primary rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-primary/20 transition-colors"
-            >
-              Xem: <span className="font-bold">{viewRole}</span>
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {showRoleDrop && (
-              <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-border rounded-lg shadow-lg z-50">
-                {ROLE_OPTIONS.map(({ role, title, desc }) => (
-                  <button
-                    key={role}
-                    onClick={() => handleRoleChange(role)}
-                    className={cn(
-                      "w-full text-left px-3 py-2.5 flex items-start justify-between gap-2 border-b border-border/60 last:border-b-0 transition-colors",
-                      viewRole === role ? "bg-primary/5" : "hover:bg-slate-50"
-                    )}
-                  >
-                    <div>
-                      <p className="text-xs font-bold text-foreground">{title}</p>
-                      <p className="text-[10px] text-muted-foreground">{desc}</p>
-                    </div>
-                    {viewRole === role && (
-                      <span className="w-2 h-2 rounded-full bg-green-500 mt-1 shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Breadcrumb */}
-          <nav className="flex-1 flex items-center gap-1 text-[11px] text-muted-foreground min-w-0 overflow-hidden" aria-label="Breadcrumb">
-            {breadcrumbs.map((crumb, i) => (
-              <span key={i} className="flex items-center gap-1 shrink-0">
-                {i > 0 && <ChevronRight className="w-3 h-3 shrink-0 text-muted-foreground/50" />}
-                <span className={cn("truncate", i === breadcrumbs.length - 1 ? "font-semibold text-foreground" : "")}>
-                  {crumb}
-                </span>
-              </span>
-            ))}
-          </nav>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
+              type="button"
               onClick={() => {
-                if (viewRole === "PM") { setPmProject(null); setPmHomeView("workspace"); }
-                else setL1Tab("meetings");
+                if (viewRole === "PM") {
+                  setPmProject(null);
+                  setPmHomeView("workspace");
+                } else setL1Tab("meetings");
               }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-white rounded-lg"
+              className="hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white sm:flex"
               style={{ backgroundColor: "#E36C25" }}
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="h-3.5 w-3.5" />
               Tạo lịch họp
             </button>
-            <button className="relative p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Thông báo">
-              <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-destructive" />
+            <button
+              type="button"
+              className="relative rounded-md p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Thông báo"
+            >
+              <Bell className="h-4 w-4" />
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-destructive" />
             </button>
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold"
-              style={{ backgroundColor: "#E36C25" }}>
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+              style={{ backgroundColor: "#E36C25" }}
+            >
               AM
             </div>
           </div>
-        </header>
+        </div>
+      </div>
 
-        {/* Project header strip — inside content area, only for PM project view */}
-        {viewRole === "PM" && pmProject && (
-          <ProjectHeaderStrip
-            project={pmProject}
-            activeTab={pmTab}
-            onTabChange={setPmTab}
-          />
-        )}
+      <div className="flex shrink-0 items-center gap-1 border-b border-border bg-white px-4 py-1.5 text-[11px] text-muted-foreground">
+        <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
+          {breadcrumbs.map((crumb, i) => (
+            <span key={i} className="flex items-center gap-1 shrink-0">
+              {i > 0 && <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground/50" />}
+              <span
+                className={cn(
+                  "truncate",
+                  i === breadcrumbs.length - 1 ? "font-semibold text-foreground" : ""
+                )}
+              >
+                {crumb}
+              </span>
+            </span>
+          ))}
+        </nav>
+      </div>
 
-        {/* Content */}
-        <main className="flex-1 overflow-auto px-4 py-5 md:px-6 space-y-5">
-          {/* Page title — hide for Engineer, PM project view, L1 project detail, and CEO (self-renders header) */}
-          {(viewRole !== "PM" || !pmProject) && viewRole !== "Engineer" && viewRole !== "CEO" && !selectedProject && (
+      <main className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-6 space-y-5">
+        {(viewRole !== "PM" || !pmProject) &&
+          viewRole !== "Engineer" &&
+          viewRole !== "CEO" &&
+          !selectedProject && (
             <div>
-              <h1 className="text-base font-extrabold text-foreground tracking-tight font-sans">
+              <h1 className="text-base font-extrabold tracking-tight text-foreground font-sans">
                 {viewRole === "PM" ? PM_HOME_LABELS[pmHomeView] : L1_TAB_LABELS[l1Tab]}
               </h1>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <p className="mt-0.5 text-xs text-muted-foreground">
                 {viewRole === "CTO" && l1Tab === "portfolio" && "22 dự án · CTO Strategic"}
-                {viewRole === "PM"  && pmHomeView === "projects"      && "Alice Morgan — 3 dự án được giao"}
-                {viewRole === "PM"  && pmHomeView === "workspace"     && "Việc cần làm & lịch họp cá nhân"}
-                {viewRole === "PM"  && pmHomeView === "notifications" && "Cấu hình quy tắc nhắc nhở"}
+                {viewRole === "PM" && pmHomeView === "projects" && "Alice Morgan — 3 dự án được giao"}
+                {viewRole === "PM" && pmHomeView === "workspace" && "Việc cần làm & lịch họp cá nhân"}
+                {viewRole === "PM" && pmHomeView === "notifications" && "Cấu hình quy tắc nhắc nhở"}
               </p>
             </div>
           )}
-          {renderContent()}
-        </main>
-      </div>
+        {renderContent()}
+      </main>
     </div>
   );
 }

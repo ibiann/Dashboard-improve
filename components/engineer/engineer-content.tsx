@@ -9,18 +9,22 @@ import { EngineerProfileSettings } from "@/components/engineer/engineer-profile-
 import { EngineerTaskDrawer } from "@/components/engineer/engineer-task-drawer";
 import { LogWorkModal, LogWorkPayload } from "@/components/engineer/log-work-modal";
 import { ENG_TASKS, EngTask } from "@/lib/engineer-mock-data";
+import { EngineerWorkflowCanvas } from "@/components/engineer/engineer-workflow-canvas";
+import type { WorkspaceViewMode } from "@/components/strategic/view-toggle";
 
 /**
  * EngineerContent — top-level stateful wrapper for all Level 3 engineer views.
- * Accepts activeTab from the unified dashboard sidebar and renders the correct view.
+ * Accepts activeTab from the unified dashboard header nav and renders the correct view.
  */
 export function EngineerContent({
   activeTab,
   onNavigate,
+  workspaceViewMode = "list",
 }: {
   activeTab: string;
   /** Chuyển tab kỹ sư (vd. từ dashboard → công việc) */
   onNavigate?: (tab: string) => void;
+  workspaceViewMode?: WorkspaceViewMode;
 }) {
   // Shared state across all engineer tabs
   const [runningTaskId, setRunningTaskId]   = useState<string | null>(null);
@@ -80,6 +84,34 @@ export function EngineerContent({
   }
 
   const drawerTask = drawerTaskId ? ENG_TASKS.find((t) => t.id === drawerTaskId) ?? null : null;
+
+  if (workspaceViewMode === "workflow") {
+    return (
+      <>
+        <EngineerWorkflowCanvas onTaskClick={handleTaskClick} />
+        {drawerTask && (
+          <EngineerTaskDrawer
+            task={drawerTask}
+            runningId={runningTaskId}
+            onToggle={handleToggleTimer}
+            timerElapsed={timerElapsed}
+            onClose={handleCloseDrawer}
+            onLogWork={handleLogWork}
+            onSubmit={handleSubmit}
+          />
+        )}
+        {logModal && (
+          <LogWorkModal
+            task={logModal.task}
+            isFinalSubmit={logModal.isFinal}
+            timerSeconds={runningTaskId === logModal.task.id ? timerElapsed : 0}
+            onClose={() => setLogModal(null)}
+            onSave={handleSaveLog}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>
