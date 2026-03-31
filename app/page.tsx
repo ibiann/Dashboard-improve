@@ -1,5 +1,5 @@
-import { UnifiedDashboard } from "@/components/unified-dashboard";
+import { HybridProjectWorkspace } from "@/components/hybrid-project-workspace";
 
 export default function Home() {
-  return <UnifiedDashboard />;
+  return <HybridProjectWorkspace />;
 }
