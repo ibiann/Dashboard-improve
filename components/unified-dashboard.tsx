@@ -288,7 +288,15 @@ function ProjectHeaderStrip({
         <span className="text-[10px] text-muted-foreground font-mono">
           {project.totalLoggedHours}h/{project.totalPlannedHours}h
         </span>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <a
+            href={`/workspace/${project.id}`}
+            className="flex items-center gap-1.5 px-3 py-1 text-[10px] font-bold text-white rounded-md hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: "#E36C25" }}
+          >
+            <Construction className="w-3 h-3" />
+            Workspace
+          </a>
           <span className="text-[10px] font-bold text-white px-2 py-1 rounded-full"
             style={{ backgroundColor: ragColor }}>{getRAGLabel(project.ragStatus)}</span>
         </div>
